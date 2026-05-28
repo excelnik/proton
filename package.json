@@ -1,0 +1,51 @@
+{
+  "name": "proton",
+  "version": "0.1.0",
+  "description": "פרוטון - מערכת ניהול פיננסי",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run webpack:watch\" \"wait-on dist/bundle.js && electron .\"",
+    "webpack:watch": "webpack --watch",
+    "webpack:build": "webpack --mode production",
+    "dist": "npm run webpack:build && electron-builder"
+  },
+  "build": {
+    "appId": "com.proton.finance",
+    "productName": "Pruton",
+    "directories": {
+      "output": "dist-app"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "public/**/*",
+      "src/db/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.0.0",
+    "@babel/preset-env": "^7.0.0",
+    "@babel/preset-react": "^7.0.0",
+    "babel-loader": "^9.0.0",
+    "concurrently": "^8.2.2",
+    "css-loader": "^7.0.0",
+    "electron": "^30.0.1",
+    "electron-builder": "^24.13.3",
+    "style-loader": "^4.0.0",
+    "wait-on": "^7.2.0",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0"
+  }
+}
