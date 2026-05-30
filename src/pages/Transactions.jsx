@@ -223,6 +223,19 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
 
   const setEdit = (k, v) => setEditForm(f => ({ ...f, [k]: v }))
 
+  function navigateToTx(txId) {
+    setExpandedTx(txId)
+    setTimeout(() => {
+      const el = document.getElementById(`tx-row-${txId}`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+  }
+
+  function toggleBudgetary(txId, current) {
+    db.prepare('UPDATE Transactions SET is_budgetary=? WHERE id=?').run(current ? 0 : 1, txId)
+    loadData()
+  }
+
   function loadData() {
     const dateCol = getDateColumn()
     const [year, month] = selectedMonth.split('-')
@@ -337,7 +350,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
         : React.createElement('table', { style: styles.table },
             React.createElement('thead', null,
               React.createElement('tr', null,
-                ['תאריך', 'בית עסק', 'קטגוריה', 'חשבון', 'סכום', '', ''].map(h =>
+                ['#', 'תאריך', 'בית עסק', 'קטגוריה', 'חשבון', 'סכום', 'תקציבי', ''].map(h =>
                   React.createElement('th', { key: h, style: styles.th }, h)
                 )
               )
@@ -441,15 +454,17 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                 return React.createElement(React.Fragment, { key: tx.id },
                   // שורה רגילה
                   React.createElement('tr', {
+                    id: `tx-row-${tx.id}`,
                     style: {
                       ...styles.tr,
-                      backgroundColor: tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : '#fff',
+                      backgroundColor: tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : !tx.is_budgetary ? '#F1F5F9' : '#fff',
                       opacity: tx.is_virtual ? 0.85 : 1,
                       cursor: tx.is_virtual ? 'default' : 'pointer',
                     },
                     onClick: () => !tx.is_virtual && setExpandedTx(isExpanded ? null : tx.id),
                     onDoubleClick: () => !tx.is_virtual && startEdit(tx),
                   },
+                    React.createElement('td', { style: { ...styles.td, color: '#94A3B8', fontSize: 11, userSelect: 'all' } }, tx.is_virtual ? '—' : `#${tx.id}`),
                     React.createElement('td', { style: styles.td }, tx.transaction_date),
                     React.createElement('td', { style: { ...styles.td, fontWeight: '500' } }, tx.business_entity || '—'),
                     React.createElement('td', { style: styles.td },
@@ -464,40 +479,36 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                       }, `${tx.transaction_type === 'Income' ? '+' : '−'}${fmt(tx.amount)}`)
                     ),
                     React.createElement('td', { style: styles.td },
-                      tx.is_virtual
-                        ? React.createElement('button', {
-                            style: { ...styles.deleteBtn, color: '#10B981', opacity: 1, fontSize: 13, fontWeight: '500' },
-                            onClick: e => { e.stopPropagation(); handleConfirmVirtual(tx) },
-                          }, '✓ אשר')
-                        : React.createElement('button', {
-                            style: styles.deleteBtn,
-                            onClick: e => { e.stopPropagation(); handleDelete(tx.id) },
-                          }, '🗑')
+                      !tx.is_virtual && React.createElement('button', {
+                        style: {
+                          fontSize: 11, padding: '2px 8px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                          backgroundColor: tx.is_budgetary ? '#DCFCE7' : '#F1F5F9',
+                          color: tx.is_budgetary ? '#15803D' : '#94A3B8',
+                        },
+                        onClick: e => { e.stopPropagation(); toggleBudgetary(tx.id, tx.is_budgetary) },
+                        title: tx.is_budgetary ? 'תקציבי — לחץ לשינוי' : 'לא תקציבי — לחץ לשינוי',
+                      }, tx.is_budgetary ? '✓ תקציבי' : '— לא תקציבי'),
                     ),
                     React.createElement('td', { style: { ...styles.td, whiteSpace: 'nowrap' } },
-                      !tx.is_virtual && React.createElement('div', { style: { display: 'flex', gap: 2 } },
-                        React.createElement('button', {
-                          style: { ...styles.deleteBtn, opacity: 1, fontSize: 13 },
-                          title: 'שכפל',
-                          onClick: e => { e.stopPropagation(); setDuplicateTx(tx) },
-                        }, '📋'),
-                        React.createElement('button', {
-                          style: { ...styles.deleteBtn, opacity: 1, fontSize: 13 },
-                          title: 'פצל',
-                          onClick: e => { e.stopPropagation(); setSplitTx(tx) },
-                        }, '✂️'),
-                        React.createElement('button', {
-                          style: { ...styles.deleteBtn, opacity: 1, fontSize: 13 },
-                          title: 'קזז',
-                          onClick: e => { e.stopPropagation(); setOffsetTx(tx) },
-                        }, '⚖️'),
+                      React.createElement('div', { style: { display: 'flex', gap: 2, alignItems: 'center' } },
+                        tx.is_virtual
+                          ? React.createElement('button', {
+                              style: { ...styles.deleteBtn, color: '#10B981', opacity: 1, fontSize: 12, fontWeight: '500' },
+                              onClick: e => { e.stopPropagation(); handleConfirmVirtual(tx) },
+                            }, '✓ אשר')
+                          : React.createElement(React.Fragment, null,
+                              React.createElement('button', { style: styles.deleteBtn, onClick: e => { e.stopPropagation(); handleDelete(tx.id) } }, '🗑'),
+                              React.createElement('button', { style: { ...styles.deleteBtn, opacity: 1 }, title: 'שכפל', onClick: e => { e.stopPropagation(); setDuplicateTx(tx) } }, '📋'),
+                              React.createElement('button', { style: { ...styles.deleteBtn, opacity: 1 }, title: 'פצל', onClick: e => { e.stopPropagation(); setSplitTx(tx) } }, '✂️'),
+                              React.createElement('button', { style: { ...styles.deleteBtn, opacity: 1 }, title: 'קזז', onClick: e => { e.stopPropagation(); setOffsetTx(tx) } }, '⚖️'),
+                            )
                       )
                     ),
                   ),
 
                   // אקורדיון
                   isExpanded && expandedData && React.createElement('tr', { key: `${tx.id}_exp`, style: { backgroundColor: '#F8FAFC' } },
-                    React.createElement('td', { colSpan: 6, style: { padding: '12px 16px', borderBottom: '1px solid #E2E8F0' } },
+                    React.createElement('td', { colSpan: 8, style: { padding: '12px 16px', borderBottom: '1px solid #E2E8F0' } },
 
                       isEditingFull
                         // ─── מצב עריכה מלאה ───
@@ -582,9 +593,24 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                               ),
                               expandedData.savingsGoal && InfoField('יעד חיסכון', expandedData.savingsGoal.name, '#10B981'),
                               expandedData.insurance && InfoField('ביטוח מקושר', expandedData.insurance.name, '#8B5CF6'),
-                              expandedData.parent && InfoField('חלק מפיצול של', `${expandedData.parent.business_entity} (${fmt(expandedData.parent.amount)})`, '#F59E0B'),
-                              expandedData.children.length > 0 && InfoField('פוצל ל', `${expandedData.children.length} חלקים`, '#F59E0B'),
-                              expandedData.offsetGroup.length > 0 && InfoField('מקוזז עם', expandedData.offsetGroup.map(o => o.business_entity || fmt(o.amount)).join(', '), '#64748B'),
+                              expandedData.parent && InfoField(
+                                'פוצל מתנועה',
+                                `#${expandedData.parent.id} — ${expandedData.parent.business_entity}`,
+                                '#F59E0B',
+                                () => navigateToTx(expandedData.parent.id)
+                              ),
+                              expandedData.children.length > 0 && InfoField(
+                                'פוצל ל',
+                                expandedData.children.map(c => `#${c.id}`).join(', '),
+                                '#F59E0B',
+                                () => navigateToTx(expandedData.children[0].id)
+                              ),
+                              expandedData.offsetGroup.length > 0 && InfoField(
+                                'מקוזז עם',
+                                expandedData.offsetGroup.map(o => `#${o.id}`).join(', '),
+                                '#64748B',
+                                () => navigateToTx(expandedData.offsetGroup[0].id)
+                              ),
                             ),
                             React.createElement('button', {
                               style: { fontSize: 11, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
@@ -804,11 +830,19 @@ function EditField(label, input) {
   )
 }
 
-function InfoField(label, value, color) {
+function InfoField(label, value, color, onClick) {
   if (!value) return null
   return React.createElement('div', { style: { minWidth: 0 } },
     React.createElement('p', { style: { fontSize: 10, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 2 } }, label),
-    React.createElement('p', { style: { fontSize: 12, fontWeight: '500', color: color || '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, value),
+    React.createElement('p', {
+      style: {
+        fontSize: 12, fontWeight: '500', color: onClick ? '#2563EB' : (color || '#0F172A'),
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        cursor: onClick ? 'pointer' : 'default',
+        textDecoration: onClick ? 'underline' : 'none',
+      },
+      onClick: onClick || undefined,
+    }, value),
   )
 }
 
@@ -923,36 +957,38 @@ function SplitModal({ tx, categories, onClose, onSave }) {
   function handleSave() {
     if (!isValid) return
 
-    // עדכן תנועת אב
-    db.prepare('UPDATE Transactions SET is_budgetary=0, is_maaser_obligated=0 WHERE id=?').run(tx.id)
-
-    // צור תנועות ילד
-    const stmt = db.prepare(`
+    const insertStmt = db.prepare(`
       INSERT INTO Transactions
         (transaction_date, value_date, amount, transaction_type, business_entity,
-         category_id, account_id, parent_id, is_budgetary, is_maaser_obligated,
-         description, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'manual')
+        category_id, account_id, parent_id, is_budgetary, is_maaser_obligated,
+        description, tags, source)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 'manual')
     `)
 
     const ids = []
     const insertAll = db.transaction(() => {
-      for (const row of rows) {
-        const result = stmt.run(
+      for (const row of rows.slice(0, -1).concat([{ ...rows[rows.length-1], amount: remainder.toFixed(2) }])) {
+        const result = insertStmt.run(
           tx.transaction_date, tx.value_date || tx.transaction_date,
           parseFloat(row.amount), tx.transaction_type, tx.business_entity,
           row.category_id || null, tx.account_id, tx.id,
           tx.is_maaser_obligated ? 1 : 0,
-          row.description || null
+          row.description || `פוצל מתנועה #${tx.id}`,
+          tx.tags || null
         )
         ids.push(result.lastInsertRowid)
       }
     })
     insertAll()
 
-    // עדכן description של האב
-    db.prepare('UPDATE Transactions SET description=? WHERE id=?')
-      .run(`פוצל לתנועות: ${ids.join(', ')}`, tx.id)
+    // עדכן תנועת אב
+    db.prepare(`
+      UPDATE Transactions SET
+        is_budgetary=0,
+        is_maaser_obligated=0,
+        description=?
+      WHERE id=?
+    `).run(`פוצל לתנועות: ${ids.map(id => '#' + id).join(', ')}`, tx.id)
 
     onSave()
   }
@@ -977,12 +1013,19 @@ function SplitModal({ tx, categories, onClose, onSave }) {
         // שורות פיצול
         rows.map((row, i) =>
           React.createElement('div', { key: i, style: { display: 'grid', gridTemplateColumns: '100px 1fr 1fr auto', gap: 8, marginBottom: 10, alignItems: 'end' } },
-            MField('סכום', React.createElement('input', {
-              style: mStyles.input, type: 'number',
-              value: row.amount,
-              placeholder: i === rows.length - 1 && remainder >= 0 ? remainder.toString() : '',
-              onChange: e => updateRow(i, 'amount', e.target.value),
-            })),
+            MField('סכום', i === rows.length - 1
+              ? React.createElement('input', {
+                  style: { ...mStyles.input, backgroundColor: '#F8FAFC', color: '#64748B' },
+                  type: 'number',
+                  value: remainder >= 0 ? remainder.toFixed(2) : '',
+                  readOnly: true,
+                })
+              : React.createElement('input', {
+                  style: mStyles.input, type: 'number',
+                  value: row.amount,
+                  onChange: e => updateRow(i, 'amount', e.target.value),
+                })
+            ),
             MField('קטגוריה', React.createElement('select', { style: mStyles.input, value: row.category_id, onChange: e => updateRow(i, 'category_id', e.target.value) },
               React.createElement('option', { value: '' }, 'בחר...'),
               expenseCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
@@ -1068,35 +1111,59 @@ function OffsetModal({ tx, categories, onClose, onSave }) {
   const hasRemainder = Math.abs(remainder) > 0.01
 
   function handleSave() {
-    // צור group_id
     const groupId = Date.now()
 
     // עדכן תנועת עוגן
-    db.prepare('UPDATE Transactions SET offset_group_id=?, is_budgetary=0, is_maaser_obligated=0 WHERE id=?')
-      .run(groupId, tx.id)
+    db.prepare(`
+      UPDATE Transactions SET
+        offset_group_id=?,
+        is_budgetary=0,
+        is_maaser_obligated=0,
+        description=?
+      WHERE id=?
+    `).run(groupId, `קוזז עם: ${basket.map(t => '#' + t.id).join(', ')}`, tx.id)
 
-    // עדכן כל תנועות העגלה
-    const updateStmt = db.prepare('UPDATE Transactions SET offset_group_id=?, is_budgetary=0, is_maaser_obligated=0 WHERE id=?')
+    // עדכן תנועות העגלה
+    const updateStmt = db.prepare(`
+      UPDATE Transactions SET
+        offset_group_id=?,
+        is_budgetary=0,
+        is_maaser_obligated=0,
+        description=?
+      WHERE id=?
+    `)
     const updateAll = db.transaction(() => {
-      for (const t of basket) updateStmt.run(groupId, t.id)
+      for (const t of basket) {
+        updateStmt.run(groupId, `קוזז עם: #${tx.id}`, t.id)
+      }
     })
     updateAll()
 
     // צור תנועת שארית אם קיימת
     if (hasRemainder && remainderCategoryId) {
       const remType = remainder > 0 ? 'Income' : 'Expense'
+      // השארית יורשת מאפיינים מהתנועה שיצרה את השארית
+      const sourceTx = remainder > 0
+        ? basket.find(t => t.transaction_type === 'Income') || tx
+        : tx.transaction_type === 'Expense' ? tx : basket.find(t => t.transaction_type === 'Expense')
+
       db.prepare(`
         INSERT INTO Transactions
           (transaction_date, value_date, amount, transaction_type, business_entity,
-           category_id, account_id, offset_group_id, is_budgetary, is_maaser_obligated,
-           description, source)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, 'manual')
+          category_id, account_id, offset_group_id,
+          is_budgetary, is_maaser_obligated,
+          description, tags, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 'manual')
       `).run(
         tx.transaction_date, tx.transaction_date,
         Math.abs(remainder), remType,
-        'שארית קיזוז',
-        remainderCategoryId, tx.account_id, groupId,
-        `שארית מקיזוז תנועה מס' ${tx.id}`
+        sourceTx?.business_entity || tx.business_entity,
+        remainderCategoryId,
+        sourceTx?.account_id || tx.account_id,
+        groupId,
+        sourceTx?.is_maaser_obligated ?? tx.is_maaser_obligated ?? 0,
+        `שארית מקיזוז תנועה #${tx.id}`,
+        sourceTx?.tags || tx.tags || null
       )
     }
 
