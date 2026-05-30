@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: 'savings',      icon: '🎯', label: 'יעדי חיסכון',    group: 'צמיחה' },
   { id: 'networth',     icon: '💎', label: 'שווי נקי',       group: 'צמיחה' },
   { id: 'maaser',       icon: '🕍', label: 'מעשרות',         group: 'צמיחה' },
+  { id: 'categories',   icon: '🏷️', label: 'קטגוריות',      group: 'מערכת' },
   { id: 'accounts',     icon: '🏦', label: 'חשבונות',        group: 'מערכת' },
   { id: 'settings',     icon: '⚙️', label: 'הגדרות',         group: 'מערכת' },
 ]

@@ -14,6 +14,7 @@ const Insurance = require('./pages/Insurance.jsx')
 const Savings = require('./pages/Savings.jsx')
 const NetWorth = require('./pages/NetWorth.jsx')
 const Recurring = require('./pages/Recurring.jsx')
+const Categories = require('./pages/Categories.jsx')
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
@@ -35,7 +36,8 @@ function App() {
     if (currentPage === 'insurance') return React.createElement(Insurance)
     if (currentPage === 'savings') return React.createElement(Savings)
     if (currentPage === 'networth') return React.createElement(NetWorth)
-      if (currentPage === 'recurring') return React.createElement(Recurring)
+    if (currentPage === 'recurring') return React.createElement(Recurring)
+    if (currentPage === 'categories') return React.createElement(Categories)
     return React.createElement(Dashboard, { selectedMonth, setSelectedMonth })
   }
 
