@@ -7,6 +7,8 @@ const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Li
 function Dashboard({ selectedMonth, setSelectedMonth }) {
   const [months, setMonths] = useState([])
   const [data, setData] = useState(null)
+  const [donutMode, setDonutMode] = useState('month')
+
 
   function loadMonths() {
     const rows = db.prepare(`
@@ -51,7 +53,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
     // תקציב
     const budgetTotal = db.prepare(`
       SELECT COALESCE(SUM(planned_amount), 0) as v FROM Budget_Goals
-      WHERE budget_period=?
+      WHERE substr(budget_period,1,7)=?
     `).get(selectedMonth).v
 
     // התפלגות הוצאות לפי קטגוריה
@@ -163,10 +165,40 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       last6.push({ month: m.slice(5), income: Math.round(inc), expenses: Math.round(exp) })
     }
 
+    // תקציב לפי קטגוריה
+    const budgetByCategory = db.prepare(`
+      SELECT bg.category_id, bg.planned_amount, c.name, c.icon, c.color
+      FROM Budget_Goals bg
+      LEFT JOIN Categories c ON bg.category_id=c.id
+      WHERE substr(bg.budget_period,1,7)=?
+      ORDER BY bg.planned_amount DESC
+    `).all(selectedMonth).map(row => {
+      const spent = db.prepare(`
+        SELECT COALESCE(SUM(amount),0) as v FROM Transactions
+        WHERE category_id=? AND transaction_type='Expense'
+        AND is_budgetary=1 AND substr(${dateCol},1,7)=?
+      `).get(row.category_id, selectedMonth).v
+      return { ...row, spent: Math.round(spent) }
+    })
+
+    // התפלגות ל-12 חודשים
+    const twelveMonthsAgo = new Date(parseInt(year), parseInt(month) - 13, 1)
+    const fromMonth = `${twelveMonthsAgo.getFullYear()}-${String(twelveMonthsAgo.getMonth() + 1).padStart(2, '0')}`
+    const expByCategory12 = db.prepare(`
+      SELECT c.name, c.color, c.icon, COALESCE(SUM(t.amount), 0) as total
+      FROM Transactions t
+      LEFT JOIN Categories c ON t.category_id=c.id
+      WHERE t.transaction_type='Expense' AND t.is_budgetary=1
+      AND substr(t.${dateCol},1,7) >= ? AND substr(t.${dateCol},1,7) <= ?
+      GROUP BY t.category_id
+      ORDER BY total DESC
+      LIMIT 6
+    `).all(fromMonth, selectedMonth)
+
     setData({
       income, expenses, bankBalance, budgetTotal, expByCategory,
       totalAssets, totalLiabilities, netWorth: totalAssets - totalLiabilities,
-      maaserObligation, maaserPaid, maaserRate, savingsMonth, last6,
+      maaserObligation, maaserPaid, maaserRate, savingsMonth, last6, budgetByCategory, expByCategory12, budgetByCategory,
     })
   }
 
@@ -204,21 +236,45 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
     ),
 
     // שורה 2 — בקרת תקציב
-    data.budgetTotal > 0 && React.createElement('div', { style: styles.card },
+    React.createElement('div', { style: styles.card },
       React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
-        React.createElement('p', { style: styles.cardTitle }, '📊 בקרת תקציב'),
-        React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: budgetColor } },
-          `${budgetPct}% נוצל`
-        ),
+        React.createElement('p', { style: styles.cardTitle }, '📊 ניצול תקציב חודשי כולל'),
+        data.budgetTotal > 0
+          ? React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: budgetColor } }, `${budgetPct}% נוצל`)
+          : React.createElement('p', { style: { fontSize: 12, color: '#94A3B8' } }, 'לא הוגדר תקציב חודשי'),
       ),
       React.createElement('div', { style: { height: 14, backgroundColor: '#E2E8F0', borderRadius: 7, overflow: 'hidden', marginBottom: 8 } },
         React.createElement('div', {
-          style: { height: '100%', borderRadius: 7, backgroundColor: budgetColor, width: `${Math.min(100, budgetPct)}%`, transition: 'width 0.4s' }
+          style: { height: '100%', borderRadius: 7, backgroundColor: data.budgetTotal > 0 ? budgetColor : '#E2E8F0', width: `${Math.min(100, budgetPct)}%`, transition: 'width 0.4s' }
         })
       ),
-      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B' } },
-        React.createElement('span', null, `נוצלו ${fmt(data.expenses)}`),
-        React.createElement('span', null, `מתוך ${fmt(data.budgetTotal)}`),
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748B', marginBottom: data.budgetByCategory.length > 0 ? 16 : 0 } },
+        React.createElement('span', null, data.budgetTotal > 0 ? `נוצלו ${fmt(data.expenses)}` : 'עבור למסך "תכנון תקציב" כדי להגדיר מסגרות.'),
+        data.budgetTotal > 0 && React.createElement('span', null, `מתוך ${fmt(data.budgetTotal)}`),
+      ),
+
+      // ניצול לפי קטגוריה
+      data.budgetByCategory.length > 0 && React.createElement('div', null,
+        React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 12, paddingTop: 12, borderTop: '1px solid #E2E8F0' } },
+          'ניצול תקציב לפי קטגוריות (הוצאות)'
+        ),
+        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 24px' } },
+          data.budgetByCategory.map((cat, i) => {
+            const pct = cat.planned_amount > 0 ? Math.min(100, Math.round((cat.spent / cat.planned_amount) * 100)) : 0
+            const colors = ['#F59E0B', '#6366F1', '#E11D48', '#10B981', '#3B82F6', '#EC4899', '#14B8A6', '#F97316', '#8B5CF6', '#84CC16']
+            const color = cat.color || colors[i % colors.length]
+            const barColor = pct >= 100 ? '#E11D48' : pct >= 80 ? '#F59E0B' : color
+            return React.createElement('div', { key: i, style: { marginBottom: 4 } },
+              React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 } },
+                React.createElement('span', { style: { fontWeight: '600', color: '#0F172A' } }, `${cat.icon || ''} ${cat.name || 'ללא'}`),
+                React.createElement('span', { style: { color: '#64748B' } }, `₪${cat.spent.toLocaleString('he-IL')} / ₪${Math.round(cat.planned_amount).toLocaleString('he-IL')}`),
+              ),
+              React.createElement('div', { style: { height: 8, backgroundColor: '#E2E8F0', borderRadius: 4, overflow: 'hidden' } },
+                React.createElement('div', { style: { height: '100%', borderRadius: 4, backgroundColor: barColor, width: `${pct}%`, transition: 'width 0.3s' } })
+              ),
+            )
+          })
+        ),
       ),
     ),
 
@@ -258,7 +314,19 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
 
     // שורה 5 — התפלגות הוצאות
     React.createElement('div', { style: { ...styles.card, marginBottom: 16 } },
-      React.createElement('p', { style: { ...styles.cardTitle, marginBottom: 12 } }, '🥧 התפלגות הוצאות'),
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+        React.createElement('p', { style: styles.cardTitle }, '🥧 התפלגות הוצאות'),
+        React.createElement('div', { style: { display: 'flex', border: '1px solid #E2E8F0', borderRadius: 8, overflow: 'hidden' } },
+          React.createElement('button', {
+            style: { padding: '4px 10px', border: 'none', fontSize: 11, cursor: 'pointer', backgroundColor: donutMode === 'month' ? '#2563EB' : '#F8FAFC', color: donutMode === 'month' ? '#fff' : '#475569' },
+            onClick: () => setDonutMode('month'),
+          }, 'חודש'),
+          React.createElement('button', {
+            style: { padding: '4px 10px', border: 'none', fontSize: 11, cursor: 'pointer', backgroundColor: donutMode === 'year' ? '#2563EB' : '#F8FAFC', color: donutMode === 'year' ? '#fff' : '#475569' },
+            onClick: () => setDonutMode('year'),
+          }, '12 חודש'),
+        ),
+      ),
       data.expByCategory.length === 0
         ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'אין נתונים')
         : React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'center' } },
@@ -266,7 +334,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
             React.createElement(ResponsiveContainer, { width: '100%', height: 180 },
               React.createElement(PieChart, null,
                 React.createElement(Pie, {
-                  data: data.expByCategory.map(c => ({ name: c.name || 'ללא', value: Math.round(c.total) })),
+                  data: (donutMode === 'month' ? data.expByCategory : data.expByCategory12 || data.expByCategory).map(c => ({ name: c.name || 'ללא', value: Math.round(c.total) })),
                   cx: '50%', cy: '50%',
                   innerRadius: 50, outerRadius: 80,
                   dataKey: 'value',
@@ -281,7 +349,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
             ),
             // רשימה
             React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-              data.expByCategory.map((cat, i) => {
+              (donutMode === 'month' ? data.expByCategory : (data.expByCategory12 || data.expByCategory)).map((cat, i) => {
                 const colors = ['#E11D48', '#F59E0B', '#2563EB', '#10B981', '#8B5CF6', '#64748B']
                 const color = cat.color || colors[i % colors.length]
                 const pct = totalExpenses > 0 ? Math.round((cat.total / totalExpenses) * 100) : 0
