@@ -1,10 +1,14 @@
 const React = require('react')
-const { useState } = React
+const { useState, useEffect } = require('react')
 const db = require('../db/index.js')
+const os = require('os')
+const path = require('path')
 
 const SETTINGS_KEYS = {
   DEFAULT_DAY: 'default_transaction_day',
   DATE_MODE: 'date_calc_mode',
+  EMERGENCY_MONTHS: 'emergency_months',
+  MAASER_RATE: 'maaser_rate_setting',
 }
 
 function getSetting(key, fallback) {
@@ -34,29 +38,104 @@ function saveSetting(key, value) {
 function Settings() {
   const [defaultDay, setDefaultDay] = useState(() => getSetting(SETTINGS_KEYS.DEFAULT_DAY, '25'))
   const [dateMode, setDateMode] = useState(() => getSetting(SETTINGS_KEYS.DATE_MODE, 'transaction_date'))
-  const [emergencyMonths, setEmergencyMonths] = useState(() => getSetting('emergency_months', '3'))
+  const [emergencyMonths, setEmergencyMonths] = useState(() => getSetting(SETTINGS_KEYS.EMERGENCY_MONTHS, '3'))
+  const [maaserRate, setMaaserRate] = useState(() => getSetting(SETTINGS_KEYS.MAASER_RATE, '0.1'))
   const [saved, setSaved] = useState(false)
+  const [rules, setRules] = useState([])
+  const [showRules, setShowRules] = useState(false)
+  const [editRule, setEditRule] = useState(null)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetStep, setResetStep] = useState(0)
+
+  function loadRules() {
+    const rows = db.prepare(`
+      SELECT r.*, c.name as category_name, c.icon as category_icon
+      FROM Automation_Rules r
+      LEFT JOIN Categories c ON r.category_id=c.id
+      WHERE r.match_type NOT IN ('setting', 'mapping')
+      ORDER BY r.use_count DESC
+    `).all()
+    setRules(rows)
+  }
+
+  useEffect(() => { if (showRules) loadRules() }, [showRules])
 
   function handleSave() {
     saveSetting(SETTINGS_KEYS.DEFAULT_DAY, defaultDay)
     saveSetting(SETTINGS_KEYS.DATE_MODE, dateMode)
-    saveSetting('emergency_months', emergencyMonths)
+    saveSetting(SETTINGS_KEYS.EMERGENCY_MONTHS, emergencyMonths)
+    saveSetting(SETTINGS_KEYS.MAASER_RATE, maaserRate)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const { ipcRenderer } = require('electron')
+
+  async function handleExport() {
+    try {
+      const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
+      const result = await ipcRenderer.invoke('export-db', dbPath)
+      if (result.cancelled) return
+      if (result.success) {
+        alert(`✓ הגיבוי נשמר בהצלחה:\n${result.path}`)
+      } else {
+        alert(`שגיאה: ${result.error}`)
+      }
+    } catch(e) {
+      alert(`שגיאה: ${e.message}`)
+    }
+  }
+
+  async function handleImport() {
+    if (!confirm('ייבוא יחליף את כל הנתונים הנוכחיים! האם להמשיך?')) return
+    try {
+      const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
+      const result = await ipcRenderer.invoke('import-db', dbPath)
+      if (result.cancelled) return
+      if (result.success) {
+        alert('✓ הנתונים יובאו בהצלחה. אנא הפעל מחדש את האפליקציה.')
+      } else {
+        alert(`שגיאה: ${result.error}`)
+      }
+    } catch(e) {
+      alert(`שגיאה: ${e.message}`)
+    }
+  }
+
+  function handleReset() {
+    if (resetStep === 0) { setShowResetConfirm(true); setResetStep(1); return }
+    if (resetStep === 1) { setResetStep(2); return }
+    // שלב 3 — מחיקה בפועל
+    db.exec(`
+      DELETE FROM Transactions;
+      DELETE FROM Accounts;
+      DELETE FROM Liabilities;
+      DELETE FROM Insurance_Policies;
+      DELETE FROM Savings_Goals;
+      DELETE FROM Budget_Goals;
+      DELETE FROM Recurring_Templates;
+      DELETE FROM Assets;
+      DELETE FROM Informal_Debts;
+    `)
+    setShowResetConfirm(false)
+    setResetStep(0)
+    alert('✓ המערכת אופסה. כל הנתונים נמחקו.')
+  }
+
+  const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 })
+
   return React.createElement('div', { style: styles.page },
     React.createElement('h1', { style: styles.title }, 'הגדרות'),
 
+
+    // ── הגדרות תאריכים ──
     React.createElement('div', { style: styles.section },
       React.createElement('h2', { style: styles.sectionTitle }, 'תאריכים'),
 
       React.createElement('div', { style: styles.settingRow },
         React.createElement('div', null,
           React.createElement('p', { style: styles.settingLabel }, 'יום ברירת מחדל לחודשים קודמים'),
-          React.createElement('p', { style: styles.settingDesc },
-            'כשמוסיפים תנועה על חודש שעבר, איזה יום להשתמש כברירת מחדל?'
-          ),
+          React.createElement('p', { style: styles.settingDesc }, 'כשמוסיפים תנועה על חודש שעבר'),
         ),
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
           React.createElement('input', {
@@ -72,12 +151,10 @@ function Settings() {
       React.createElement('div', { style: { ...styles.settingRow, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' } },
         React.createElement('div', null,
           React.createElement('p', { style: styles.settingLabel }, 'בסיס חישוב תאריך'),
-          React.createElement('p', { style: styles.settingDesc },
-            'על איזה תאריך יתבססו חישובי תקציב ודשבורד?'
-          ),
+          React.createElement('p', { style: styles.settingDesc }, 'על איזה תאריך יתבססו חישובי תקציב ודשבורד'),
         ),
         React.createElement('select', {
-          style: { border: '1px solid #E2E8F0', borderRadius: 10, padding: '7px 12px', fontSize: 13, outline: 'none' },
+          style: styles.select,
           value: dateMode,
           onChange: e => setDateMode(e.target.value),
         },
@@ -85,11 +162,37 @@ function Settings() {
           React.createElement('option', { value: 'value_date' }, 'תאריך ערך'),
         ),
       ),
+    ),
 
-      React.createElement('div', { style: { ...styles.settingRow, marginTop: 16, paddingTop: 16, borderTop: '1px solid #F1F5F9' } },
+    // ── הגדרות מעשרות ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('h2', { style: styles.sectionTitle }, 'מעשרות'),
+
+      React.createElement('div', { style: styles.settingRow },
         React.createElement('div', null,
-          React.createElement('p', { style: styles.settingLabel }, 'חודשי מחיה בקרן חירום'),
-          React.createElement('p', { style: styles.settingDesc }, 'כמה חודשי הוצאות לשמור בקרן החירום?'),
+          React.createElement('p', { style: styles.settingLabel }, 'שיעור מעשר ברירת מחדל'),
+        ),
+        React.createElement('div', { style: { display: 'flex', border: '1px solid #E2E8F0', borderRadius: 10, overflow: 'hidden' } },
+          React.createElement('button', {
+            style: { padding: '7px 16px', border: 'none', fontSize: 13, cursor: 'pointer', backgroundColor: maaserRate === '0.1' ? '#2563EB' : '#F8FAFC', color: maaserRate === '0.1' ? '#fff' : '#475569' },
+            onClick: () => setMaaserRate('0.1'),
+          }, '10% מעשר'),
+          React.createElement('button', {
+            style: { padding: '7px 16px', border: 'none', fontSize: 13, cursor: 'pointer', backgroundColor: maaserRate === '0.2' ? '#2563EB' : '#F8FAFC', color: maaserRate === '0.2' ? '#fff' : '#475569' },
+            onClick: () => setMaaserRate('0.2'),
+          }, '20% חומש'),
+        ),
+      ),
+    ),
+
+    // ── קרן חירום ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('h2', { style: styles.sectionTitle }, 'קרן חירום'),
+
+      React.createElement('div', { style: styles.settingRow },
+        React.createElement('div', null,
+          React.createElement('p', { style: styles.settingLabel }, 'חודשי מחיה ביעד'),
+          React.createElement('p', { style: styles.settingDesc }, 'כמה חודשי הוצאות לשמור בקרן החירום'),
         ),
         React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
           React.createElement('input', {
@@ -103,10 +206,152 @@ function Settings() {
       ),
     ),
 
+    // כפתור שמירה
     React.createElement('button', {
-      style: { ...styles.btnPrimary, marginTop: 8 },
+      style: { ...styles.btnPrimary, marginBottom: 16 },
       onClick: handleSave,
     }, saved ? '✓ נשמר!' : 'שמור הגדרות'),
+
+    // ── ניהול חוקי זיהוי ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showRules ? 16 : 0 } },
+        React.createElement('div', null,
+          React.createElement('h2', { style: { ...styles.sectionTitle, marginBottom: 2 } }, 'חוקי זיהוי אוטומטי'),
+          React.createElement('p', { style: styles.settingDesc }, 'חוקים שנלמדו מסיווג ידני'),
+        ),
+        React.createElement('button', {
+          style: styles.btnSecondary,
+          onClick: () => setShowRules(s => !s),
+        }, showRules ? 'סגור' : `נהל (${rules.length || '?'})`),
+      ),
+
+      showRules && React.createElement('div', null,
+        rules.length === 0
+          ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'אין חוקים עדיין')
+          : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              rules.map(rule =>
+                React.createElement('div', { key: rule.id, style: styles.ruleRow },
+                  React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                    React.createElement('p', { style: { fontSize: 13, fontWeight: '500', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, rule.original_string),
+                    React.createElement('p', { style: { fontSize: 11, color: '#64748B' } },
+                      `→ ${rule.category_icon || ''} ${rule.category_name || 'ללא קטגוריה'} | שימושים: ${rule.use_count}`
+                    ),
+                  ),
+                  React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                    React.createElement('button', {
+                      style: { ...styles.iconBtn },
+                      onClick: () => setEditRule(rule),
+                    }, '✏️'),
+                    React.createElement('button', {
+                      style: { ...styles.iconBtn, color: '#E11D48' },
+                      onClick: () => { db.prepare('DELETE FROM Automation_Rules WHERE id=?').run(rule.id); loadRules() },
+                    }, '🗑'),
+                  ),
+                )
+              )
+            )
+      ),
+    ),
+
+    // ── גיבוי ושחזור ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('h2', { style: styles.sectionTitle }, 'גיבוי ושחזור'),
+      React.createElement('div', { style: { display: 'flex', gap: 10 } },
+        React.createElement('button', {
+          style: { ...styles.btnPrimary, backgroundColor: '#10B981' },
+          onClick: handleExport,
+        }, '📦 ייצא גיבוי'),
+        React.createElement('button', {
+          style: styles.btnSecondary,
+          onClick: handleImport,
+        }, '📂 ייבא גיבוי'),
+      ),
+      React.createElement('p', { style: { fontSize: 11, color: '#94A3B8', marginTop: 8 } },
+        'הגיבוי נשמר כקובץ .db על שולחן העבודה'
+      ),
+    ),
+
+    // ── איפוס מערכת ──
+    React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
+      React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס מערכת'),
+      React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
+        'מחיקת כל התנועות, החשבונות וכל הנתונים. פעולה בלתי הפיכה!'
+      ),
+
+      !showResetConfirm
+        ? React.createElement('button', {
+            style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
+            onClick: () => setShowResetConfirm(true),
+          }, 'איפוס מערכת')
+        : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 16 } },
+            React.createElement('p', { style: { fontSize: 14, fontWeight: '600', color: '#E11D48', marginBottom: 12 } },
+              resetStep === 1
+                ? '⚠️ האם אתה בטוח? כל הנתונים יימחקו לצמיתות!'
+                : '🚨 אישור אחרון — פעולה זו לא ניתנת לביטול!'
+            ),
+            React.createElement('div', { style: { display: 'flex', gap: 8 } },
+              React.createElement('button', {
+                style: styles.btnSecondary,
+                onClick: () => { setShowResetConfirm(false); setResetStep(0) },
+              }, 'ביטול'),
+              React.createElement('button', {
+                style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
+                onClick: handleReset,
+              }, resetStep === 1 ? 'כן, אני בטוח' : 'מחק הכל לצמיתות'),
+            ),
+          ),
+    ),
+
+    // מודאל עריכת חוק
+    editRule && React.createElement(EditRuleModal, {
+      rule: editRule,
+      onClose: () => setEditRule(null),
+      onSave: () => { setEditRule(null); loadRules() },
+    }),
+  )
+}
+
+// ─── מודאל עריכת חוק ─────────────────────────────────────────────────────
+
+function EditRuleModal({ rule, onClose, onSave }) {
+  const categories = db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY sort_order').all()
+  const [categoryId, setCategoryId] = useState(rule.category_id?.toString() ?? '')
+  const [cleanedName, setCleanedName] = useState(rule.cleaned_name || rule.original_string)
+
+  function handleSave() {
+    db.prepare('UPDATE Automation_Rules SET category_id=?, cleaned_name=? WHERE id=?')
+      .run(categoryId || null, cleanedName, rule.id)
+    onSave()
+  }
+
+  return React.createElement('div', { style: styles.overlay },
+    React.createElement('div', { style: { ...styles.modal, maxWidth: 420 } },
+      React.createElement('div', { style: styles.modalHeader },
+        React.createElement('h2', { style: styles.modalTitle }, 'עריכת חוק זיהוי'),
+        React.createElement('button', { style: styles.closeBtn, onClick: onClose }, '✕'),
+      ),
+      React.createElement('div', { style: styles.modalBody },
+        React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8 } },
+          `שם מקורי: ${rule.original_string}`
+        ),
+        Field('שם נקי (כפי שיוצג)', React.createElement('input', { style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value) })),
+        Field('קטגוריה', React.createElement('select', { style: styles.input, value: categoryId, onChange: e => setCategoryId(e.target.value) },
+          React.createElement('option', { value: '' }, '— ללא קטגוריה —'),
+          categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+        )),
+      ),
+      React.createElement('div', { style: styles.modalFooter },
+        React.createElement('button', { style: styles.btnSecondary, onClick: onClose }, 'ביטול'),
+        React.createElement('button', { style: styles.btnPrimary, onClick: handleSave }, 'שמור'),
+      ),
+    )
+  )
+}
+
+function Field(label, input) {
+  return React.createElement('div', { style: { marginBottom: 14 } },
+    React.createElement('label', { style: { fontSize: 12, fontWeight: '500', color: '#475569', display: 'block', marginBottom: 4 } }, label),
+    input,
   )
 }
 
@@ -119,7 +364,19 @@ const styles = {
   settingLabel: { fontSize: 14, fontWeight: '500', color: '#0F172A', marginBottom: 4 },
   settingDesc: { fontSize: 12, color: '#94A3B8' },
   numInput: { width: 64, border: '1px solid #E2E8F0', borderRadius: 10, padding: '7px 12px', fontSize: 14, textAlign: 'center', outline: 'none' },
+  select: { border: '1px solid #E2E8F0', borderRadius: 10, padding: '7px 12px', fontSize: 13, outline: 'none' },
   btnPrimary: { backgroundColor: '#2563EB', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: '500', cursor: 'pointer' },
+  btnSecondary: { backgroundColor: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 10, padding: '9px 20px', fontSize: 13, cursor: 'pointer' },
+  ruleRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', backgroundColor: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0' },
+  iconBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '3px 6px' },
+  overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
+  modal: { backgroundColor: '#fff', borderRadius: 20, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E2E8F0' },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', color: '#0F172A' },
+  closeBtn: { background: 'none', border: 'none', fontSize: 18, color: '#94A3B8', cursor: 'pointer' },
+  modalBody: { padding: 24 },
+  modalFooter: { display: 'flex', gap: 8, padding: '16px 24px', borderTop: '1px solid #E2E8F0' },
+  input: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
 }
 
 module.exports = Settings
