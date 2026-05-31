@@ -11,6 +11,7 @@ let mainWindow
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    icon: path.join(__dirname, '../assets/icon.ico'),
     width: 1400,
     height: 900,
     minWidth: 1024,

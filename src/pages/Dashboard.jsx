@@ -302,16 +302,16 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       React.createElement('div', { style: { ...styles.card, backgroundColor: '#0F172A', display: 'flex', flexDirection: 'column', justifyContent: 'center' } },
         React.createElement('p', { style: { fontSize: 13, color: '#94A3B8', marginBottom: 12, textAlign: 'center' } }, 'סידור יעב"ץ'),
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
-          'וְעַיֵּן בְּהוֹצָאָה לְעֻמַּת הַכְנָסָה'
+          'ועיין בהוצאה לעומת הכנסה'
         ),
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
-          'וְסֵדֶר הַהוֹצָאָה הוּא חֲצִי פַּרְנָסָה'
+          'וסדר ההוצאה הוא חצי פרנסה'
         ),
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
-          'וּבִמְקוֹם גְּדוֹלִים אַל תַּעֲמֹד'
+          'ובמקום גדולים אל תעמוד'
         ),
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
-          'וְלְשֻׁלְחָנָם לֹא תִּמְחֹד'
+          'ולשלחנם לא תחמוד'
         ),
       ),
 

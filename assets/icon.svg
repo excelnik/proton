@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="#1E3A8A"/>
+  <rect x="0" y="0" width="512" height="512" rx="114" fill="none" stroke="#3B82F6" stroke-width="2" opacity="0.3"/>
+  <line x1="186" y1="126" x2="186" y2="386" stroke="#93C5FD" stroke-width="28" stroke-linecap="round"/>
+  <path d="M186 126 Q346 126 346 226 Q346 326 186 326" fill="none" stroke="#93C5FD" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="266" cy="226" r="48" fill="#F59E0B" opacity="0.9"/>
+  <text x="266" y="242" text-anchor="middle" font-size="36" font-weight="700" fill="#1E3A8A" font-family="serif">₪</text>
+</svg>
