@@ -158,7 +158,8 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       transaction_date: tx.transaction_date,
       amount: tx.amount.toString(),
       business_entity: tx.business_entity || '',
-      category_id: tx.category_id?.toString() ?? '',
+      category_id: tx.category_parent_id ? tx.category_parent_id.toString() : (tx.category_id?.toString() ?? ''),
+      sub_category_id: tx.category_parent_id ? (tx.category_id?.toString() ?? '') : '',
       account_id: tx.account_id?.toString() ?? '',
     })
   }
@@ -170,7 +171,8 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       value_date: tx.value_date || '',
       amount: tx.amount.toString(),
       business_entity: tx.business_entity || '',
-      category_id: tx.category_id?.toString() ?? '',
+      category_id: tx.category_parent_id ? tx.category_parent_id.toString() : (tx.category_id?.toString() ?? ''),
+      sub_category_id: tx.category_parent_id ? (tx.category_id?.toString() ?? '') : '',
       account_id: tx.account_id?.toString() ?? '',
       description: tx.description || '',
       tags: tx.tags || '',
@@ -184,6 +186,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
   }
 
   function saveEdit(txId) {
+    const finalCategoryId = editForm.sub_category_id || editForm.category_id || null
     db.prepare(`
       UPDATE Transactions SET
         transaction_date=?, amount=?, business_entity=?,
@@ -191,7 +194,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       WHERE id=?
     `).run(
       editForm.transaction_date, parseFloat(editForm.amount),
-      editForm.business_entity, editForm.category_id || null,
+      editForm.business_entity, finalCategoryId,
       editForm.account_id, txId
     )
     setEditingTx(null)
@@ -214,6 +217,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       editForm.is_budgetary ? 1 : 0, editForm.is_maaser_obligated ? 1 : 0,
       editForm.liability_id || null, editForm.recurring_id || null,
       editForm.savings_goal_id || null, editForm.insurance_id || null,
+      editForm.sub_category_id || editForm.category_id || null,
       txId
     )
     setEditingFull(null)
@@ -244,9 +248,11 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     const to = `${year}-${month}-${lastDay}`
 
     const txs = db.prepare(`
-      SELECT t.*, c.name as category_name, a.name as account_name
+      SELECT t.*, c.name as category_name, a.name as account_name,
+        c.parent_id as category_parent_id, cp.name as parent_category_name
       FROM Transactions t
       LEFT JOIN Categories c ON t.category_id = c.id
+      LEFT JOIN Categories cp ON c.parent_id = cp.id
       LEFT JOIN Accounts a ON t.account_id = a.id
       WHERE t.${dateCol} BETWEEN ? AND ?
       ORDER BY t.transaction_date DESC, t.id DESC
@@ -264,7 +270,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     })
 
     setTransactions([...txs, ...virtual])
-    setCategories(db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY sort_order').all())
+    setCategories(db.prepare('SELECT * FROM Categories WHERE is_active=1 AND parent_id IS NULL ORDER BY sort_order').all())
     setAccounts(db.prepare('SELECT * FROM Accounts WHERE is_active=1').all())
   }
 
@@ -347,11 +353,12 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
             React.createElement('p', null, '💸'),
             React.createElement('p', null, 'אין תנועות לחודש זה'),
           )
-        : React.createElement('table', { style: styles.table },
-            React.createElement('thead', null,
+        : React.createElement('div', { style: { overflowY: 'auto', maxHeight: 'calc(100vh - 210px)' } },
+            React.createElement('table', { style: styles.table },
+            React.createElement('thead', { style: { position: 'sticky', top: 0 } },
               React.createElement('tr', null,
-                ['#', 'תאריך', 'בית עסק', 'קטגוריה', 'חשבון', 'סכום', 'תקציבי', ''].map(h =>
-                  React.createElement('th', { key: h, style: styles.th }, h)
+                ['#', 'תאריך', 'בית עסק', 'קטגוריה', 'תת-קטגוריה', 'חשבון', 'סכום', 'תקציבי', ''].map(h =>
+                  React.createElement('th', { key: h, style: styles.th, position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 1 }, h)
                 )
               )
             ),
@@ -419,6 +426,23 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                         )
                       ),
                       React.createElement('td', { style: styles.td },
+                        (() => {
+                          const subs = editForm.category_id
+                            ? db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1').all(parseInt(editForm.category_id))
+                            : []
+                          return subs.length > 0
+                            ? React.createElement('select', {
+                                style: { ...inlineInput, fontSize: 12 },
+                                value: editForm.sub_category_id || '',
+                                onChange: e => setEdit('sub_category_id', e.target.value),
+                              },
+                                React.createElement('option', { value: '' }, '— ללא —'),
+                                subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                              )
+                            : React.createElement('span', { style: { fontSize: 11, color: '#CBD5E1' } }, '—')
+                        })()
+                      ),
+                      React.createElement('td', { style: styles.td },
                         React.createElement('select', {
                           style: { ...inlineInput, fontSize: 12 },
                           value: editForm.account_id,
@@ -464,14 +488,27 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                     onClick: () => !tx.is_virtual && setExpandedTx(isExpanded ? null : tx.id),
                     onDoubleClick: () => !tx.is_virtual && startEdit(tx),
                   },
-                    React.createElement('td', { style: { ...styles.td, color: '#94A3B8', fontSize: 11, userSelect: 'all' } }, tx.is_virtual ? '—' : `#${tx.id}`),
+                    React.createElement('td', { style: { ...styles.td, color: '#94A3B8', fontSize: 11, userSelect: 'all' } },
+                      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
+                        tx.is_virtual ? '—' : `#${tx.id}`,
+                        !tx.is_virtual && React.createElement('span', { style: { fontSize: 9, color: '#CBD5E1', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' } }, '▼'),
+                      )
+                    ),
                     React.createElement('td', { style: styles.td }, tx.transaction_date),
                     React.createElement('td', { style: { ...styles.td, fontWeight: '500' } }, tx.business_entity || '—'),
                     React.createElement('td', { style: styles.td },
-                      tx.category_name
-                        ? React.createElement('span', { style: styles.badge }, tx.category_name)
-                        : React.createElement('span', { style: styles.badgeEmpty }, 'ללא קטגוריה')
+                      tx.category_parent_id
+                        ? React.createElement('span', { style: styles.badge }, tx.parent_category_name || '—')
+                        : tx.category_name
+                          ? React.createElement('span', { style: styles.badge }, tx.category_name)
+                          : React.createElement('span', { style: styles.badgeEmpty }, 'ללא קטגוריה')
                     ),
+                    React.createElement('td', { style: styles.td },
+                      tx.category_parent_id
+                        ? React.createElement('span', { style: { ...styles.badge, backgroundColor: '#F1F5F9', color: '#64748B' } }, tx.category_name)
+                        : React.createElement('span', { style: { color: '#E2E8F0' } }, '—')
+                    ),
+                    
                     React.createElement('td', { style: styles.td }, tx.account_name),
                     React.createElement('td', { style: { ...styles.td, textAlign: 'left' } },
                       React.createElement('span', {
@@ -508,7 +545,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
 
                   // אקורדיון
                   isExpanded && expandedData && React.createElement('tr', { key: `${tx.id}_exp`, style: { backgroundColor: '#F8FAFC' } },
-                    React.createElement('td', { colSpan: 8, style: { padding: '12px 16px', borderBottom: '1px solid #E2E8F0' } },
+                    React.createElement('td', { colSpan: 9, style: { padding: '12px 16px', borderBottom: '1px solid #E2E8F0' } },
 
                       isEditingFull
                         // ─── מצב עריכה מלאה ───
@@ -520,9 +557,27 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                               EditField('בית עסק', React.createElement('input', { style: editInput, value: editForm.business_entity, onChange: e => setEdit('business_entity', e.target.value) })),
                               EditField('קטגוריה', React.createElement('select', { style: editInput, value: editForm.category_id, onChange: e => setEdit('category_id', e.target.value) },
                                 React.createElement('option', { value: '' }, 'ללא קטגוריה'),
-                                categories.filter(c => tx.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
-                                  .map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                                db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY parent_id, sort_order').all()
+                                .filter(c => tx.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
+                                .map(c => React.createElement('option', { key: c.id, value: c.id },
+                                  `${c.parent_id ? '　└ ' : ''}${c.icon || ''} ${c.name}`
+                                ))
                               )),
+                              EditField('תת-קטגוריה', (() => {
+                                const subs = editForm.category_id
+                                  ? db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1').all(parseInt(editForm.category_id))
+                                  : []
+                                return subs.length > 0
+                                  ? React.createElement('select', {
+                                      style: editInput,
+                                      value: editForm.sub_category_id || '',
+                                      onChange: e => setEdit('sub_category_id', e.target.value),
+                                    },
+                                      React.createElement('option', { value: '' }, '— ללא —'),
+                                      subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                                    )
+                                  : React.createElement('span', { style: { fontSize: 12, color: '#94A3B8' } }, '—')
+                              })()),
                               EditField('חשבון', React.createElement('select', { style: editInput, value: editForm.account_id, onChange: e => setEdit('account_id', e.target.value) },
                                 accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
                               )),
@@ -623,6 +678,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
               })
             )
           )
+        )
     ),
 
     showModal && React.createElement(AddTransactionModal, {
@@ -668,6 +724,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
   const today = new Date().toISOString().slice(0, 10)
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const isCurrentMonth = selectedMonth === currentMonth
+  const [subCategoryId, setSubCategoryId] = useState('')
 
   function getDefaultDate() {
     if (isCurrentMonth) return today
@@ -697,7 +754,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
     `).run(
       form.transaction_date, form.value_date || form.transaction_date,
       parseFloat(form.amount), form.transaction_type,
-      form.business_entity, form.category_id || null, form.account_id,
+      form.business_entity, subCategoryId || form.category_id || null, form.account_id,
       form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.description,
     )
     if (addAnother) {
@@ -721,6 +778,10 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
     if (form.transaction_type === 'Savings')   return c.type === 'Savings'
     return false
   })
+
+  const subCategories = form.category_id
+    ? db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1 ORDER BY sort_order').all(parseInt(form.category_id))
+    : []
 
   const showCategory = form.transaction_type !== 'Transfer'
 
@@ -751,7 +812,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
         ),
         Field('בית עסק', React.createElement('input', { style: styles.input, placeholder: 'שם העסק', value: form.business_entity, onChange: e => set('business_entity', e.target.value) })),
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 } },
-          showCategory && Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => set('category_id', e.target.value) },
+          showCategory && Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => { set('category_id', e.target.value); setSubCategoryId('') } },
             React.createElement('option', { value: '' }, 'בחר קטגוריה'),
             filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon} ${c.name}`))
           )),
@@ -759,6 +820,15 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
             accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
           )),
         ),
+
+        showCategory && subCategories.length > 0 && Field('תת-קטגוריה', React.createElement('select', {
+          style: styles.input,
+          value: subCategoryId,
+          onChange: e => setSubCategoryId(e.target.value),
+        },
+          React.createElement('option', { value: '' }, '— ללא —'),
+          subCategories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+        )),
         React.createElement('div', { style: { display: 'flex', gap: 16 } },
           React.createElement('label', { style: styles.checkLabel },
             React.createElement('input', { type: 'checkbox', checked: form.is_budgetary, onChange: e => set('is_budgetary', e.target.checked) }),
@@ -801,7 +871,7 @@ const styles = {
   summaryCard: { backgroundColor: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: 16 },
   summaryLabel: { fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', marginBottom: 4 },
   summaryValue: { fontSize: 20, fontWeight: 'bold' },
-  tableWrap: { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' },
+  tableWrap: { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
   table: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'right', fontSize: 11, fontWeight: '600', color: '#64748B', padding: '12px 16px', borderBottom: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' },
   tr: { borderBottom: '1px solid #F1F5F9' },
@@ -860,12 +930,15 @@ const editInput = {
 
 function DuplicateModal({ tx, categories, accounts, onClose, onSave }) {
   const today = new Date().toISOString().slice(0, 10)
+    const [subCategoryId, setSubCategoryId] = useState(
+    tx.category_parent_id ? (tx.category_id?.toString() ?? '') : ''
+  )
   const [form, setForm] = useState({
     transaction_date: today,
     amount: tx.amount.toString(),
     transaction_type: tx.transaction_type,
     business_entity: tx.business_entity || '',
-    category_id: tx.category_id?.toString() ?? '',
+    category_id: tx.category_parent_id ? tx.category_parent_id.toString() : (tx.category_id?.toString() ?? ''),
     account_id: tx.account_id?.toString() ?? '',
     is_budgetary: tx.is_budgetary ? true : false,
     is_maaser_obligated: tx.is_maaser_obligated ? true : false,
@@ -884,7 +957,7 @@ function DuplicateModal({ tx, categories, accounts, onClose, onSave }) {
     `).run(
       form.transaction_date, form.transaction_date,
       parseFloat(form.amount), form.transaction_type, form.business_entity,
-      form.category_id || null, form.account_id,
+      subCategoryId || form.category_id || null, form.account_id,
       form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0,
       form.description || null, form.tags || null
     )
@@ -915,6 +988,21 @@ function DuplicateModal({ tx, categories, accounts, onClose, onSave }) {
             React.createElement('option', { value: '' }, 'ללא קטגוריה'),
             filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
           )),
+          MField('תת-קטגוריה', (() => {
+            const subs = form.category_id
+              ? db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1').all(parseInt(form.category_id))
+              : []
+            return subs.length > 0
+              ? React.createElement('select', {
+                  style: mStyles.input,
+                  value: subCategoryId,
+                  onChange: e => setSubCategoryId(e.target.value),
+                },
+                  React.createElement('option', { value: '' }, '— ללא —'),
+                  subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                )
+              : React.createElement('span', { style: { fontSize: 12, color: '#94A3B8' } }, '—')
+          })()),
           MField('חשבון', React.createElement('select', { style: mStyles.input, value: form.account_id, onChange: e => set('account_id', e.target.value) },
             accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
           )),
@@ -937,9 +1025,9 @@ function SplitModal({ tx, categories, onClose, onSave }) {
   ])
 
   const total = tx.amount
-  const usedAmount = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
+  const usedAmount = rows.slice(0, -1).reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
   const remainder = Math.round((total - usedAmount) * 100) / 100
-  const isValid = Math.abs(remainder) < 0.01
+  const isValid = usedAmount > 0 && remainder >= 0 && rows.slice(0, -1).every(r => parseFloat(r.amount) > 0)
 
   function updateRow(i, k, v) {
     setRows(prev => prev.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
@@ -957,6 +1045,10 @@ function SplitModal({ tx, categories, onClose, onSave }) {
   function handleSave() {
     if (!isValid) return
 
+    const finalRows = rows.map((row, i) =>
+      i === rows.length - 1 ? { ...row, amount: remainder.toFixed(2) } : row
+    )
+
     const insertStmt = db.prepare(`
       INSERT INTO Transactions
         (transaction_date, value_date, amount, transaction_type, business_entity,
@@ -967,12 +1059,11 @@ function SplitModal({ tx, categories, onClose, onSave }) {
 
     const ids = []
     const insertAll = db.transaction(() => {
-      for (const row of rows.slice(0, -1).concat([{ ...rows[rows.length-1], amount: remainder.toFixed(2) }])) {
+      for (const row of finalRows.slice(0, -1).concat([{ ...rows[rows.length-1], amount: remainder.toFixed(2) }])) {
         const result = insertStmt.run(
           tx.transaction_date, tx.value_date || tx.transaction_date,
           parseFloat(row.amount), tx.transaction_type, tx.business_entity,
-          row.category_id || null, tx.account_id, tx.id,
-          tx.is_maaser_obligated ? 1 : 0,
+          row.category_id || null, tx.account_id, tx.id, 1,
           row.description || `פוצל מתנועה #${tx.id}`,
           tx.tags || null
         )
@@ -1085,8 +1176,9 @@ function OffsetModal({ tx, categories, onClose, onSave }) {
 
   const searchResults = search.length > 1
     ? db.prepare(`
-        SELECT t.*, c.name as category_name FROM Transactions t
+        SELECT t.*, c.parent_id as category_parent_id, cp.name as parent_category_name FROM Transactions t
         LEFT JOIN Categories c ON t.category_id=c.id
+        LEFT JOIN Categories cp ON c.parent_id=cp.id
         WHERE t.id != ?
           AND (t.business_entity LIKE ? OR CAST(t.amount AS TEXT) LIKE ?)
           AND t.offset_group_id IS NULL
@@ -1161,7 +1253,7 @@ function OffsetModal({ tx, categories, onClose, onSave }) {
         remainderCategoryId,
         sourceTx?.account_id || tx.account_id,
         groupId,
-        sourceTx?.is_maaser_obligated ?? tx.is_maaser_obligated ?? 0,
+        sourceTx?.is_maaser_obligated ?? tx.is_maaser_obligated ?? 1,
         `שארית מקיזוז תנועה #${tx.id}`,
         sourceTx?.tags || tx.tags || null
       )
