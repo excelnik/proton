@@ -81,6 +81,59 @@ function saveMapping(accountId, mapping) {
   } catch {}
 }
 
+function findBestRule(businessEntity) {
+  if (!businessEntity) return null
+  const name = businessEntity.toLowerCase().trim()
+  const rules = db.prepare(`
+    SELECT r.*, c.name as category_name FROM Automation_Rules r
+    LEFT JOIN Categories c ON r.category_id=c.id
+    WHERE r.match_type NOT IN ('mapping','setting')
+    AND r.category_id IS NOT NULL
+  `).all()
+  if (rules.length === 0) return null
+
+  // שלב 1 — התאמה מדויקת
+  const exactMatches = rules.filter(r => r.original_string.toLowerCase() === name)
+  if (exactMatches.length === 1) return exactMatches[0]
+  if (exactMatches.length > 1) return exactMatches.sort((a, b) => b.use_count - a.use_count)[0]
+
+  // שלב 2 — התאמה חלקית לפי מילים
+  const stopWords = ['בעמ', 'בע"מ', 'חברה', 'עוסק', 'מורשה', 'בע', 'של', 'את', 'על', 'עם', 'ltd', 'inc']
+  const getWords = str => str.toLowerCase()
+    .replace(/[^א-תa-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !stopWords.includes(w))
+
+  const currentWords = getWords(name)
+  if (currentWords.length === 0) return null
+
+  let scores = {}
+  let ruleMap = {}
+  for (const rule of rules) {
+    const ruleWords = getWords(rule.original_string)
+    const matches = currentWords.filter(cw => 
+      ruleWords.some(rw => 
+        rw.includes(cw) || 
+        cw.includes(rw) ||
+        (cw.length >= 4 && rw.length >= 4 && (rw.startsWith(cw.slice(0, 4)) || cw.startsWith(rw.slice(0, 4))))
+      )
+    )
+    if (matches.length > 0) {
+      const key = rule.category_id
+      // צבור ניקוד מכל החוקים לאותה קטגוריה
+      scores[key] = (scores[key] || 0) + matches.length * (rule.use_count || 1)
+      // שמור את החוק עם הניקוד הגבוה ביותר לייצוג
+      if (!ruleMap[key] || matches.length * (rule.use_count || 1) > (ruleMap[key]._score || 0)) {
+        ruleMap[key] = { ...rule, _score: matches.length * (rule.use_count || 1) }
+      }
+    }
+  }
+
+  const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1])
+  if (sorted.length > 0) return ruleMap[parseInt(sorted[0][0])]
+  return null
+}
+
 function Import({ onNavigate }) {
   const [step, setStep] = useState(0)
   const [accounts, setAccounts] = useState([])
@@ -171,13 +224,6 @@ function Import({ onNavigate }) {
       AND ABS(julianday(transaction_date) - julianday(?)) <= 1
     `)
 
-    const findRule = db.prepare(`
-      SELECT * FROM Automation_Rules
-      WHERE match_type != 'mapping' AND match_type != 'setting'
-      AND ? LIKE '%' || original_string || '%'
-      ORDER BY priority DESC LIMIT 1
-    `)
-
     const noDateCount = { count: 0 }
 
     const rows = allRows.map(row => {
@@ -235,11 +281,10 @@ function Import({ onNavigate }) {
       let categoryName = null
       let autoDetected = false
       if (rawBusiness) {
-        const rule = findRule.get(rawBusiness.toLowerCase())
+        const rule = findBestRule(rawBusiness)
         if (rule) {
           categoryId = rule.category_id
-          const cat = categories.find(c => c.id === rule.category_id)
-          categoryName = cat?.name ?? null
+          categoryName = rule.category_name ?? categories.find(c => c.id === rule.category_id)?.name ?? null
           autoDetected = true
         }
       }
@@ -263,7 +308,7 @@ function Import({ onNavigate }) {
       INSERT INTO Transactions
         (transaction_date, value_date, amount, transaction_type, business_entity,
          description, category_id, account_id, is_budgetary, is_maaser_obligated, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 'import')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'import')
     `)
 
     const importAll = db.transaction(() => {
@@ -274,6 +319,21 @@ function Import({ onNavigate }) {
           row.amount, row.txType, row.rawBusiness,
           row.details || null, row.categoryId, row.accountId
         )
+            // שמור חוק אוטומטי
+            if (row.rawBusiness && row.categoryId) {
+              const existing = db.prepare(
+                "SELECT id FROM Automation_Rules WHERE original_string=? AND match_type NOT IN ('mapping','setting')"
+              ).get(row.rawBusiness.toLowerCase())
+              if (!existing) {
+                db.prepare(`
+                  INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
+                  VALUES (?, ?, ?, 'contains', 0, 1)
+                `).run(row.rawBusiness.toLowerCase(), row.rawBusiness, row.categoryId)
+              } else {
+                db.prepare('UPDATE Automation_Rules SET category_id=?, use_count=use_count+1 WHERE id=?')
+                  .run(row.categoryId, existing.id)
+              }
+            }
       }
     })
 
