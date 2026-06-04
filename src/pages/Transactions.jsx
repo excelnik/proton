@@ -725,6 +725,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const isCurrentMonth = selectedMonth === currentMonth
   const [subCategoryId, setSubCategoryId] = useState('')
+  const [autoDetected, setAutoDetected] = useState(false)
 
   function getDefaultDate() {
     if (isCurrentMonth) return today
@@ -744,6 +745,77 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
     is_budgetary: true, is_maaser_obligated: true, description: '',
   })
 
+  function detectCategory(businessEntity) {
+    if (!businessEntity || businessEntity.length < 2) return
+    const stopWords = ['בעמ', 'בע"מ', 'חברה', 'עוסק', 'מורשה', 'בע', 'של', 'את', 'על', 'עם', 'ltd', 'inc']
+    const getWords = str => str.toLowerCase()
+      .replace(/[^א-תa-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !stopWords.includes(w))
+      .map(w => w.startsWith('ה') && w.length > 3 ? w.slice(1) : w)
+
+    const name = businessEntity.toLowerCase().trim()
+    const rules = db.prepare(`
+      SELECT * FROM Automation_Rules
+      WHERE match_type NOT IN ('setting','mapping') AND category_id IS NOT NULL
+    `).all()
+
+    if (rules.length === 0) return
+
+    // התאמה מדויקת
+    const exactMatches = rules.filter(r => r.original_string.toLowerCase() === name)
+    if (exactMatches.length > 0) {
+      const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(best.category_id)
+      if (cat?.parent_id) {
+        set('category_id', cat.parent_id.toString())
+        setSubCategoryId(cat.id.toString())
+      } else {
+        set('category_id', best.category_id.toString())
+        setSubCategoryId('')
+      }
+      setAutoDetected(true)
+      setAutoDetected(true)
+      return
+    }
+
+    // התאמה חלקית
+    const currentWords = getWords(name)
+    if (currentWords.length === 0) return
+
+    let scores = {}
+    let ruleMap = {}
+    for (const rule of rules) {
+      const ruleWords = getWords(rule.original_string)
+      const matches = currentWords.filter(cw =>
+        ruleWords.some(rw =>
+          rw.includes(cw) || cw.includes(rw) ||
+          (cw.length >= 4 && rw.length >= 4 && (rw.startsWith(cw.slice(0, 4)) || cw.startsWith(rw.slice(0, 4))))
+        )
+      )
+      if (matches.length > 0) {
+        const key = rule.category_id
+        scores[key] = (scores[key] || 0) + matches.length * (rule.use_count || 1)
+        if (!ruleMap[key] || matches.length * (rule.use_count || 1) > (ruleMap[key]._score || 0)) {
+          ruleMap[key] = { ...rule, _score: matches.length * (rule.use_count || 1) }
+        }
+      }
+    }
+
+    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1])
+    if (sorted.length > 0) {
+      const catId = parseInt(sorted[0][0])
+      const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(catId)
+      if (cat?.parent_id) {
+        set('category_id', cat.parent_id.toString())
+        setSubCategoryId(cat.id.toString())
+      } else {
+        set('category_id', catId.toString())
+        setSubCategoryId('')
+      }
+      setAutoDetected(true)
+    }
+  }
+
   function handleSave(addAnother = false) {
     if (!form.amount || !form.account_id) return
     db.prepare(`
@@ -757,6 +829,23 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
       form.business_entity, subCategoryId || form.category_id || null, form.account_id,
       form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.description,
     )
+    // שמור חוק אוטומטי
+    if (form.business_entity && (subCategoryId || form.category_id)) {
+      const catId = subCategoryId || form.category_id
+      const existing = db.prepare(
+        "SELECT id FROM Automation_Rules WHERE original_string=? AND match_type NOT IN ('mapping','setting')"
+      ).get(form.business_entity.toLowerCase())
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
+          VALUES (?, ?, ?, 'contains', 0, 1)
+        `).run(form.business_entity.toLowerCase(), form.business_entity, catId)
+      } else {
+        db.prepare('UPDATE Automation_Rules SET category_id=?, use_count=use_count+1 WHERE id=?')
+          .run(catId, existing.id)
+      }
+    }
+
     if (addAnother) {
       // נקה שדות אבל השאר את המודאל פתוח
       setForm(f => ({
@@ -810,7 +899,21 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
           Field('תאריך ערך', React.createElement('input', { style: styles.input, type: 'date', value: form.value_date, onChange: e => set('value_date', e.target.value) })),
           Field('סכום (₪)', React.createElement('input', { style: styles.input, type: 'number', placeholder: '0', value: form.amount, onChange: e => set('amount', e.target.value) })),
         ),
-        Field('בית עסק', React.createElement('input', { style: styles.input, placeholder: 'שם העסק', value: form.business_entity, onChange: e => set('business_entity', e.target.value) })),
+        Field('בית עסק', React.createElement('div', { style: { position: 'relative' } },
+          React.createElement('input', {
+            style: styles.input,
+            placeholder: 'שם העסק',
+            value: form.business_entity,
+            onChange: e => {
+              set('business_entity', e.target.value)
+              setAutoDetected(false)
+              detectCategory(e.target.value)
+            }
+          }),
+          autoDetected && React.createElement('span', {
+            style: { position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: '#10B981' }
+          }, '✓ זוהה אוטומטית')
+        )),
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 } },
           showCategory && Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => { set('category_id', e.target.value); setSubCategoryId('') } },
             React.createElement('option', { value: '' }, 'בחר קטגוריה'),
