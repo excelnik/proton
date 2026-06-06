@@ -773,21 +773,21 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
 
     if (rules.length === 0) return
 
-    // התאמה מדויקת
-    const exactMatches = rules.filter(r => r.original_string.toLowerCase() === name)
-    if (exactMatches.length > 0) {
-      const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(best.category_id)
-      if (cat?.parent_id) {
-        set('category_id', cat.parent_id.toString())
-        setSubCategoryId(cat.id.toString())
-      } else {
-        set('category_id', best.category_id.toString())
-        setSubCategoryId('')
-      }
-      setAutoDetected(true)
-      setAutoDetected(true)
-      return
+   // התאמה מדויקת
+  const exactMatches = rules.filter(r => r.original_string.toLowerCase() === name)
+  if (exactMatches.length > 0) {
+    const best = exactMatches.sort((a, b) => b.use_count - a.use_count)[0]
+    const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(best.category_id)
+    if (cat?.parent_id) {
+      set('category_id', cat.parent_id.toString())
+      setSubCategoryId(cat.id.toString())
+    } else {
+      set('category_id', best.category_id.toString())
+      setSubCategoryId('')
     }
+    setAutoDetected(true)
+    return
+  }
 
     // התאמה חלקית
     const currentWords = getWords(name)

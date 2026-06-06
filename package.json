@@ -13,6 +13,7 @@
   "build": {
     "appId": "com.proton.finance",
     "productName": "Pruton",
+    "icon": "assets/icon.ico",
     "directories": {
       "output": "dist-app"
     },
@@ -24,6 +25,7 @@
       "dist/**/*",
       "public/**/*",
       "src/db/**/*",
+      "assets/**/*",
       "node_modules/**/*",
       "package.json"
     ]

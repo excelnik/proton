@@ -107,15 +107,18 @@ function Settings() {
     if (resetStep === 1) { setResetStep(2); return }
     // שלב 3 — מחיקה בפועל
     db.exec(`
+      PRAGMA foreign_keys = OFF;
       DELETE FROM Transactions;
-      DELETE FROM Accounts;
+      DELETE FROM Budget_Goals;
       DELETE FROM Liabilities;
       DELETE FROM Insurance_Policies;
       DELETE FROM Savings_Goals;
-      DELETE FROM Budget_Goals;
       DELETE FROM Recurring_Templates;
       DELETE FROM Assets;
       DELETE FROM Informal_Debts;
+      DELETE FROM Accounts;
+      DELETE FROM Automation_Rules WHERE match_type NOT IN ('setting','mapping');
+      PRAGMA foreign_keys = ON;
     `)
     setShowResetConfirm(false)
     setResetStep(0)

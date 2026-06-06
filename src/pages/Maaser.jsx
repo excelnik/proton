@@ -3,7 +3,7 @@ const { useState, useEffect } = React
 const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
 
-const DONATION_CATEGORY_ID = 9
+const DONATION_CATEGORY_ID = 8
 const MAASER_RATE_KEY = 'maaser_rate_setting'
 
 function getSavedRate() {
@@ -66,6 +66,7 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
     const dateCol = getDateColumn()
     const ds = period === 'all' ? '' : `AND ${dateCol} LIKE '${period}%'`
     const dst = period === 'all' ? '' : `AND t.${dateCol} LIKE '${period}%'`
+    console.log('period:', period, 'dst:', dst)
 
     const income = db.prepare(
       `SELECT COALESCE(SUM(amount),0) as v FROM Transactions WHERE transaction_type='Income' AND is_maaser_obligated=1 ${ds}`
@@ -102,8 +103,7 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
       FROM Transactions t
       LEFT JOIN Categories c ON t.category_id = c.id
       LEFT JOIN Accounts a ON t.account_id = a.id
-      WHERE t.transaction_type = 'Income'
-         OR t.transaction_type = 'Expense'
+      WHERE (t.transaction_type = 'Income' OR t.transaction_type = 'Expense')
       ${dst}
       ORDER BY t.transaction_date DESC
     `).all()
@@ -165,7 +165,7 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
     ),
 
     // כרטיסי סיכום
-    React.createElement('div', { style: styles.grid4 },
+    React.createElement('div', { style: styles.grid5 },
 
       KpiCard('הכנסות חייבות', fmt(summary.obligatedIncome), '#0F172A', 'לפני ניכויים'),
       KpiCard('ניכויי הוצאות', fmt(summary.exemptExpenses), '#F59E0B', 'הוצאות פטורות ממעשר'),
@@ -183,6 +183,8 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
           ),
         ),
       ),
+
+      KpiCard('הופרש עד כה', fmt(summary.paid), '#10B981', 'תרומות וצדקה'),
 
       // כרטיס יתרה — עם פירוט חומש
       React.createElement('div', {
@@ -310,6 +312,7 @@ const styles = {
   toggleBtn: { padding: '7px 16px', border: 'none', backgroundColor: '#F8FAFC', fontSize: 13, cursor: 'pointer', color: '#475569' },
   toggleActive: { backgroundColor: '#2563EB', color: '#fff' },
   grid4: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 },
+  grid5: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 16 },
   card: { backgroundColor: '#fff', borderRadius: 14, border: '1px solid #E2E8F0', padding: 18 },
   cardLabel: { fontSize: 11, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 },
   cardValue: { fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
