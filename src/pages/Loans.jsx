@@ -626,7 +626,7 @@ function QuickTransactionModal({ prefill, onClose, onSave }) {
         Field('הערות', React.createElement('input', { style: styles.input, value: form.description, onChange: e => set('description', e.target.value), placeholder: 'למשל: כולל קנס פירעון' })),
         Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => set('category_id', e.target.value) },
           React.createElement('option', { value: '' }, 'בחר קטגוריה...'),
-          categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+          categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
         )),
         Field('חשבון', React.createElement('select', { style: styles.input, value: form.account_id, onChange: e => set('account_id', e.target.value) },
           accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))

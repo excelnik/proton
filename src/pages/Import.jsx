@@ -644,7 +644,7 @@ function Import({ onNavigate }) {
                     React.createElement('option', { value: '' }, row.autoDetected ? `🤖 ${row.categoryName}` : 'בחר...'),
                     categories
                       .filter(c => row.txType === 'Income' ? c.type === 'Income' : c.type === 'Expense')
-                      .map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                      .map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
                   )
                 ),
                 React.createElement('td', { style: styles.td },

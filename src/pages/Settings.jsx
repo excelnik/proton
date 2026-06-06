@@ -233,9 +233,15 @@ function Settings() {
                 React.createElement('div', { key: rule.id, style: styles.ruleRow },
                   React.createElement('div', { style: { flex: 1, minWidth: 0 } },
                     React.createElement('p', { style: { fontSize: 13, fontWeight: '500', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, rule.original_string),
-                    React.createElement('p', { style: { fontSize: 11, color: '#64748B' } },
-                      `→ ${rule.category_icon || ''} ${rule.category_name || 'ללא קטגוריה'} | שימושים: ${rule.use_count}`
-                    ),
+                    React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, (() => {
+                      const cat = rule.category_id
+                        ? db.prepare('SELECT c.*, cp.name as parent_name FROM Categories c LEFT JOIN Categories cp ON c.parent_id=cp.id WHERE c.id=?').get(rule.category_id)
+                        : null
+                      const catDisplay = cat?.parent_id
+                        ? `${cat.parent_name} ← ${cat.name}`
+                        : (cat?.name || 'ללא קטגוריה')
+                      return `→ ${rule.category_icon || ''} ${catDisplay} | שימושים: ${rule.use_count}`
+                    })()),
                   ),
                   React.createElement('div', { style: { display: 'flex', gap: 6 } },
                     React.createElement('button', {
@@ -337,7 +343,7 @@ function EditRuleModal({ rule, onClose, onSave }) {
         Field('שם נקי (כפי שיוצג)', React.createElement('input', { style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value) })),
         Field('קטגוריה', React.createElement('select', { style: styles.input, value: categoryId, onChange: e => setCategoryId(e.target.value) },
           React.createElement('option', { value: '' }, '— ללא קטגוריה —'),
-          categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+          categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
         )),
       ),
       React.createElement('div', { style: styles.modalFooter },

@@ -422,7 +422,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                           onChange: e => setEdit('category_id', e.target.value),
                         },
                           React.createElement('option', { value: '' }, 'ללא קטגוריה'),
-                          filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                          filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
                         )
                       ),
                       React.createElement('td', { style: styles.td },
@@ -437,7 +437,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                                 onChange: e => setEdit('sub_category_id', e.target.value),
                               },
                                 React.createElement('option', { value: '' }, '— ללא —'),
-                                subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                                subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
                               )
                             : React.createElement('span', { style: { fontSize: 11, color: '#CBD5E1' } }, '—')
                         })()
@@ -574,7 +574,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                                       onChange: e => setEdit('sub_category_id', e.target.value),
                                     },
                                       React.createElement('option', { value: '' }, '— ללא —'),
-                                      subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                                      subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
                                     )
                                   : React.createElement('span', { style: { fontSize: 12, color: '#94A3B8' } }, '—')
                               })()),
@@ -917,7 +917,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 } },
           showCategory && Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => { set('category_id', e.target.value); setSubCategoryId('') } },
             React.createElement('option', { value: '' }, 'בחר קטגוריה'),
-            filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon} ${c.name}`))
+            filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon}`))
           )),
           Field('חשבון', React.createElement('select', { style: styles.input, value: form.account_id, onChange: e => set('account_id', e.target.value) },
             accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
@@ -930,7 +930,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
           onChange: e => setSubCategoryId(e.target.value),
         },
           React.createElement('option', { value: '' }, '— ללא —'),
-          subCategories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+          subCategories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
         )),
         React.createElement('div', { style: { display: 'flex', gap: 16 } },
           React.createElement('label', { style: styles.checkLabel },
@@ -1089,7 +1089,7 @@ function DuplicateModal({ tx, categories, accounts, onClose, onSave }) {
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
           MField('קטגוריה', React.createElement('select', { style: mStyles.input, value: form.category_id, onChange: e => set('category_id', e.target.value) },
             React.createElement('option', { value: '' }, 'ללא קטגוריה'),
-            filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+            filteredCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
           )),
           MField('תת-קטגוריה', (() => {
             const subs = form.category_id
@@ -1102,7 +1102,7 @@ function DuplicateModal({ tx, categories, accounts, onClose, onSave }) {
                   onChange: e => setSubCategoryId(e.target.value),
                 },
                   React.createElement('option', { value: '' }, '— ללא —'),
-                  subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+                  subs.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
                 )
               : React.createElement('span', { style: { fontSize: 12, color: '#94A3B8' } }, '—')
           })()),
@@ -1222,7 +1222,7 @@ function SplitModal({ tx, categories, onClose, onSave }) {
             ),
             MField('קטגוריה', React.createElement('select', { style: mStyles.input, value: row.category_id, onChange: e => updateRow(i, 'category_id', e.target.value) },
               React.createElement('option', { value: '' }, 'בחר...'),
-              expenseCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+              expenseCats.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
             )),
             MField('הערה', React.createElement('input', { style: mStyles.input, value: row.description, onChange: e => updateRow(i, 'description', e.target.value), placeholder: 'אופציונלי' })),
             React.createElement('button', {
@@ -1461,7 +1461,7 @@ function OffsetModal({ tx, categories, onClose, onSave }) {
             React.createElement('option', { value: '' }, 'בחר קטגוריה לשארית...'),
             categories
               .filter(c => remainder > 0 ? c.type === 'Income' : c.type === 'Expense')
-              .map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+              .map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
           ),
         ),
       ),

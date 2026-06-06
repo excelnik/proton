@@ -613,7 +613,7 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
           )),
           Field('קטגוריה', React.createElement('select', { style: styles.input, value: form.category_id, onChange: e => set('category_id', e.target.value) },
             React.createElement('option', { value: '' }, '— בחר —'),
-            categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`))
+            categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
           )),
         ),
 

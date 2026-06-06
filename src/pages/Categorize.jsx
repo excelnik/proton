@@ -2,12 +2,27 @@ const React = require('react')
 const { useState, useEffect } = React
 const db = require('../db/index.js')
 
+// סגנון פוקוס גלובלי
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style')
+  style.textContent = `
+    tr[tabindex="0"]:focus { outline: 2px solid #2563EB !important; outline-offset: -2px; }
+    select:focus { outline: 2px solid #2563EB; border-color: #2563EB; }
+    input:focus { outline: 2px solid #2563EB; border-color: #2563EB; }
+  `
+  if (!document.getElementById('focus-styles')) {
+    style.id = 'focus-styles'
+    document.head.appendChild(style)
+  }
+}
+
 function Categorize() {
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
   const [filter, setFilter] = useState('uncategorized')
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(null)
+  const [focusedRow, setFocusedRow] = useState(null)
 
   function loadData() {
     const txs = db.prepare(`
@@ -27,12 +42,11 @@ function Categorize() {
     setSaving(txId)
     db.prepare('UPDATE Transactions SET category_id = ? WHERE id = ?').run(categoryId || null, txId)
 
-    // למידה אוטומטית — שמור חוק לעתיד
+    // למידה אוטומטית
     if (businessEntity && categoryId) {
       const existing = db.prepare(
         "SELECT id FROM Automation_Rules WHERE original_string = ? AND match_type != 'mapping'"
       ).get(businessEntity.toLowerCase())
-
       if (!existing) {
         db.prepare(`
           INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
@@ -45,14 +59,15 @@ function Categorize() {
       }
     }
 
+    // עדכן מיד את התצוגה אבל אל תסנן עדיין
     setTransactions(prev =>
-      prev.map(t => t.id === txId ? { ...t, category_id: categoryId } : t)
+      prev.map(t => t.id === txId ? { ...t, category_id: categoryId, _justCategorized: true } : t)
     )
     setSaving(null)
   }
 
   const filtered = transactions
-    .filter(t => filter === 'all' || !t.category_id)
+    .filter(t => filter === 'all' || !t.category_id || t._justCategorized)
     .filter(t => !search ||
       (t.business_entity ?? '').toLowerCase().includes(search.toLowerCase())
     )
@@ -133,8 +148,10 @@ function Categorize() {
                   key: tx.id,
                   style: {
                     ...styles.tr,
-                    backgroundColor: !tx.category_id ? '#FFFBEB' : '#fff',
-                  }
+                    backgroundColor: focusedRow === tx.id ? '#EFF6FF' : !tx.category_id ? '#FFFBEB' : '#fff',
+                    outline: focusedRow === tx.id ? '2px solid #2563EB' : 'none',
+                    outlineOffset: '-2px',
+                  },
                 },
                   React.createElement('td', { style: styles.td }, tx.transaction_date),
                   React.createElement('td', { style: { ...styles.td, color: '#64748B', fontSize: 12 } }, tx.account_name || '—'),
@@ -155,11 +172,37 @@ function Categorize() {
                       },
                       value: tx.category_id || '',
                       disabled: saving === tx.id,
-                      onChange: e => handleCategorize(tx.id, e.target.value ? parseInt(e.target.value) : null, tx.business_entity),
+                      tabIndex: 0,
+                      onFocus: () => setFocusedRow(tx.id),
+                      onBlur: () => setFocusedRow(null),
+                      onChange: e => {
+                        // בחירה עם עכבר בלבד — לא מעביר אוטומטית
+                        handleCategorize(tx.id, e.target.value ? parseInt(e.target.value) : null, tx.business_entity)
+                      },
+                      onKeyDown: e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleCategorize(tx.id, e.target.value ? parseInt(e.target.value) : null, tx.business_entity)
+                          // הסר מהרשימה ועבור הלאה
+                          setTimeout(() => {
+                            setTransactions(prev =>
+                              prev.map(t => t.id === tx.id ? { ...t, _justCategorized: false } : t)
+                            )
+                            const selects = document.querySelectorAll('select[tabindex="0"]')
+                            const current = Array.from(selects).findIndex(s => s === e.target)
+                            if (current >= 0 && selects[current + 1]) selects[current + 1].focus()
+                          }, 50)
+                        }
+                      },
+                      onClick: e => {
+                        // אפשר בחירה עם עכבר
+                        const val = e.target.value
+                        if (val) handleCategorize(tx.id, parseInt(val), tx.business_entity)
+                      },
                     },
                       React.createElement('option', { value: '' }, 'בחר קטגוריה...'),
                       relevantCats.map(c =>
-                        React.createElement('option', { key: c.id, value: c.id }, `${c.icon || ''} ${c.name}`)
+                        React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`)
                       )
                     )
                   ),
