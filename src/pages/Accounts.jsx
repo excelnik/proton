@@ -7,6 +7,17 @@ function Accounts() {
   const [showModal, setShowModal] = useState(false)
   const [editAccount, setEditAccount] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadAccounts() {
     const accs = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
     const result = accs.map(acc => {

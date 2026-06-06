@@ -39,6 +39,17 @@ function Savings() {
   const [depositGoal, setDepositGoal] = useState(null)
   const [linkGoal, setLinkGoal] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadGoals() {
     const active = db.prepare('SELECT * FROM Savings_Goals WHERE is_active=1 ORDER BY target_date ASC').all()
     const archived = db.prepare('SELECT * FROM Savings_Goals WHERE is_active=0 ORDER BY id DESC').all()

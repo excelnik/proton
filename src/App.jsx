@@ -1,5 +1,5 @@
 const React = require('react')
-const { useState } = React
+const { useState, useEffect } = React
 const Sidebar = require('./components/Sidebar.jsx')
 const Dashboard = require('./pages/Dashboard.jsx')
 const Accounts = require('./pages/Accounts.jsx')
@@ -22,6 +22,34 @@ function App() {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+
+  useEffect(() => {
+    const tabMap = {
+      '1': 'dashboard',
+      '2': 'transactions',
+      '3': 'import',
+      '4': 'categorize',
+      '5': 'recurring',
+      '6': 'budget',
+      '7': 'loans',
+      '8': 'insurance',
+      '9': 'savings',
+      '0': 'networth',
+      'מ': 'maaser',  'm': 'maaser', 'n': 'maaser',
+      'ק': 'categories', 'k': 'categories',
+      'ח': 'accounts',  'j': 'accounts',
+      'ה': 'settings',  'h': 'settings',  'v': 'settings',
+    }
+    const handler = e => {
+      if (!e.altKey) return
+      if (tabMap[e.key]) {
+        e.preventDefault()
+        setCurrentPage(tabMap[e.key])
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   function renderPage() {
     if (currentPage === 'dashboard')    return React.createElement(Dashboard, { selectedMonth, setSelectedMonth })

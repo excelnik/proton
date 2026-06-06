@@ -10,6 +10,17 @@ function Categories() {
   const [filterType, setFilterType] = useState('all')
   const [expandedCat, setExpandedCat] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadCategories() {
     const cats = db.prepare(`
       SELECT c.*, 

@@ -77,6 +77,17 @@ function Loans() {
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [prefillTransaction, setPrefillTransaction] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadLoans() {
     const rows = db.prepare('SELECT * FROM Liabilities WHERE is_active=1 ORDER BY id DESC').all()
     const archived = db.prepare('SELECT * FROM Liabilities WHERE is_active=0 ORDER BY id DESC').all()

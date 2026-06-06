@@ -15,6 +15,24 @@ function Recurring() {
   const [deleteMode, setDeleteMode] = useState('keep')
   const [linkTemplate, setLinkTemplate] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'N' || e.key === 'מ')) {
+        e.preventDefault()
+        setModalType('installment')
+        setEditTemplate(null)
+        setShowModal(true)
+      } else if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setModalType('recurring')
+        setEditTemplate(null)
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadTemplates() {
     const active = db.prepare(`
       SELECT t.*, c.name as category_name, c.icon as category_icon, a.name as account_name

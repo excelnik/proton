@@ -152,6 +152,17 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
   const [splitTx, setSplitTx] = useState(null)
   const [offsetTx, setOffsetTx] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function startEdit(tx) {
     setEditingTx(tx.id)
     setEditForm({

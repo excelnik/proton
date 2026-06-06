@@ -88,6 +88,20 @@ function NetWorth() {
   const [editAsset, setEditAsset] = useState(null)
   const [editDebt, setEditDebt] = useState(null)
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'N' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowDebtModal(true)
+      } else if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowAssetModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadData() {
     setAccounts(db.prepare('SELECT * FROM Accounts WHERE is_active=1').all())
     setLoans(db.prepare('SELECT * FROM Liabilities WHERE is_active=1').all())

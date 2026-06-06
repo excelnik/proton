@@ -12,6 +12,17 @@ function Insurance() {
   const [deletePolicy, setDeletePolicy] = useState(null)
   const [deleteMode, setDeleteMode] = useState('keep')
 
+  useEffect(() => {
+    const handler = e => {
+      if (e.ctrlKey && (e.key === 'n' || e.key === 'מ')) {
+        e.preventDefault()
+        setShowModal(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   function loadPolicies() {
     const active = db.prepare('SELECT * FROM Insurance_Policies WHERE is_active=1 ORDER BY renewal_date ASC').all()
     const archived = db.prepare('SELECT * FROM Insurance_Policies WHERE is_active=0 ORDER BY id DESC').all()
