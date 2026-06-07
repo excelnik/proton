@@ -46,7 +46,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
           COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
         FROM Transactions WHERE account_id=?
         AND transaction_date <= ?
-      `).get(acc.id, `${selectedMonth}-31`)
+      `).get(acc.id, selectedMonth === 'all' ? '2999-12-31' : `${selectedMonth}-31`)
       bankBalance += acc.opening_balance + stats.inc - stats.exp
     }
 
@@ -232,7 +232,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       KpiCard('הכנסות', fmt(data.income), '#10B981', '↑'),
       KpiCard('הוצאות', fmt(data.expenses), '#E11D48', '↓'),
       KpiCard('יתרה חודשית', fmt(data.income - data.expenses), data.income >= data.expenses ? '#10B981' : '#E11D48', data.income >= data.expenses ? '✓' : '!'),
-      KpiCard('יתרת בנקים', fmt(data.bankBalance), '#2563EB', '🏦'),
+      KpiCard('יתרת בנקים', `${data.bankBalance < 0 ? '−' : ''}${fmt(data.bankBalance)}`, data.bankBalance < 0 ? '#E11D48' : '#2563EB', '🏦'),
     ),
 
     // שורה 2 — בקרת תקציב

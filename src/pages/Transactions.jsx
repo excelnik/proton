@@ -167,6 +167,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     setEditingTx(tx.id)
     setEditForm({
       transaction_date: tx.transaction_date,
+      transaction_type: tx.transaction_type,
       amount: tx.amount.toString(),
       business_entity: tx.business_entity || '',
       category_id: tx.category_parent_id ? tx.category_parent_id.toString() : (tx.category_id?.toString() ?? ''),
@@ -200,11 +201,11 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     const finalCategoryId = editForm.sub_category_id || editForm.category_id || null
     db.prepare(`
       UPDATE Transactions SET
-        transaction_date=?, amount=?, business_entity=?,
+        transaction_date=?, transaction_type=?, amount=?, business_entity=?,
         category_id=?, account_id=?
       WHERE id=?
     `).run(
-      editForm.transaction_date, parseFloat(editForm.amount),
+      editForm.transaction_date, editForm.transaction_type, parseFloat(editForm.amount),
       editForm.business_entity, finalCategoryId,
       editForm.account_id, txId
     )
@@ -253,10 +254,9 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
 
   function loadData() {
     const dateCol = getDateColumn()
-    const [year, month] = selectedMonth.split('-')
-    const from = `${year}-${month}-01`
-    const lastDay = new Date(year, month, 0).getDate()
-    const to = `${year}-${month}-${lastDay}`
+    const isAllTime = selectedMonth === 'all'
+    const from = isAllTime ? '1900-01-01' : `${selectedMonth}-01`
+    const to = isAllTime ? '2999-12-31' : `${selectedMonth}-31`
 
     const txs = db.prepare(`
       SELECT t.*, c.name as category_name, a.name as account_name,
@@ -345,7 +345,10 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
           style: styles.select,
           value: selectedMonth,
           onChange: e => setSelectedMonth(e.target.value),
-        }, months.map(m => React.createElement('option', { key: m.val, value: m.val }, m.label))),
+        },
+          React.createElement('option', { value: 'all' }, 'כל הזמנים'),
+          months.map(m => React.createElement('option', { key: m.val, value: m.val }, m.label))
+        ),
         React.createElement('button', { style: styles.btnPrimary, onClick: () => setShowModal(true) }, '+ תנועה חדשה'),
       )
     ),
@@ -564,6 +567,12 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                             React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 } },
                               EditField('תאריך עסקה', React.createElement('input', { style: editInput, type: 'date', value: editForm.transaction_date, onChange: e => setEdit('transaction_date', e.target.value) })),
                               EditField('תאריך ערך', React.createElement('input', { style: editInput, type: 'date', value: editForm.value_date, onChange: e => setEdit('value_date', e.target.value) })),
+                              EditField('סוג תנועה', React.createElement('select', { style: editInput, value: editForm.transaction_type, onChange: e => setEdit('transaction_type', e.target.value) },
+                                React.createElement('option', { value: 'Expense' }, 'הוצאה'),
+                                React.createElement('option', { value: 'Income' }, 'הכנסה'),
+                                React.createElement('option', { value: 'Transfer' }, 'העברה'),
+                                React.createElement('option', { value: 'Savings' }, 'חיסכון'),
+                              )),
                               EditField('סכום', React.createElement('input', { style: editInput, type: 'number', value: editForm.amount, onChange: e => setEdit('amount', e.target.value) })),
                               EditField('בית עסק', React.createElement('input', { style: editInput, value: editForm.business_entity, onChange: e => setEdit('business_entity', e.target.value) })),
                               EditField('קטגוריה', React.createElement('select', { style: editInput, value: editForm.category_id, onChange: e => setEdit('category_id', e.target.value) },
@@ -739,7 +748,7 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
   const [autoDetected, setAutoDetected] = useState(false)
 
   function getDefaultDate() {
-    if (isCurrentMonth) return today
+    if (selectedMonth === 'all' || isCurrentMonth) return today
     try {
       const defaultDay = db.prepare(
         "SELECT cleaned_name FROM Automation_Rules WHERE original_string='default_transaction_day' AND match_type='setting'"

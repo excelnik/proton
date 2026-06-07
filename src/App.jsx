@@ -18,10 +18,7 @@ const Categories = require('./pages/Categories.jsx')
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [selectedMonth, setSelectedMonth] = useState('all')
 
   useEffect(() => {
     const tabMap = {
