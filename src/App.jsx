@@ -21,6 +21,21 @@ function App() {
   const [selectedMonth, setSelectedMonth] = useState('all')
 
   useEffect(() => {
+    const { ipcRenderer } = require('electron')
+    
+    ipcRenderer.on('update-available', () => {
+      // הודעה שקטה — לא מפריעה
+      console.log('עדכון זמין')
+    })
+    
+    ipcRenderer.on('update-downloaded', () => {
+      if (confirm('עדכון חדש הורד ומוכן להתקנה. להפעיל מחדש עכשיו?')) {
+        ipcRenderer.send('restart-app')
+      }
+    })
+  }, [])
+
+  useEffect(() => {
     const tabMap = {
       '1': 'dashboard',
       '2': 'transactions',
