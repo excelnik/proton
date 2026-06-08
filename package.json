@@ -28,7 +28,8 @@
       "src/db/**/*",
       "assets/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "crashLogger.js"
     ],
     "publish": {
       "provider": "github",
