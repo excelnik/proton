@@ -2,10 +2,12 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
+const { initCrashLogger } = require('./crashLogger')
 
 // נתיב ה-DB בתיקיית המשתמש
 const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
 process.env.PROTON_DB_PATH = DB_PATH
+initCrashLogger(path.join(DB_PATH, 'logs'))
 
 let mainWindow
 
