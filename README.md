@@ -112,6 +112,4 @@ proton/
 
 ## רישיון
 
-## רישיון
-
 GPL v3 — ראה [LICENSE](LICENSE) לפרטים
