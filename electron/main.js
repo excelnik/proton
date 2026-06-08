@@ -1,13 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
-const { initCrashLogger } = require('./crashLogger')
+const { autoUpdater } = require('electron-updater')
 
-// נתיב ה-DB בתיקיית המשתמש
 const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
 process.env.PROTON_DB_PATH = DB_PATH
-initCrashLogger(path.join(DB_PATH, 'logs'))
 
 let mainWindow
 
@@ -29,6 +27,16 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../public/index.html'))
 
+  autoUpdater.checkForUpdatesAndNotify()
+
+  autoUpdater.on('update-available', () => {
+    mainWindow.webContents.send('update-available')
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    mainWindow.webContents.send('update-downloaded')
+  })
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
   })
@@ -44,7 +52,9 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
-const { dialog } = require('electron')
+ipcMain.on('restart-app', () => {
+  autoUpdater.quitAndInstall()
+})
 
 ipcMain.handle('export-db', async (event, srcPath) => {
   try {
