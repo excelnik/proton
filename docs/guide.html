@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>פרוטון — מדריך מלא</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #0F1F3D;
+      --blue: #1E40AF;
+      --blue-light: #3B82F6;
+      --gold: #F59E0B;
+      --green: #10B981;
+      --red: #EF4444;
+      --bg: #F0F4FF;
+      --white: #ffffff;
+      --gray: #64748B;
+      --gray-light: #E2E8F0;
+      --text: #1E293B;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Heebo', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+
+    header {
+      background: linear-gradient(135deg, var(--navy), #1a2f5e);
+      padding: 48px 24px; text-align: center;
+    }
+    header h1 { font-size: 36px; font-weight: 800; color: white; margin-bottom: 8px; }
+    header p { font-size: 16px; color: #93C5FD; }
+    .header-badge {
+      display: inline-block; background: rgba(59,130,246,0.2);
+      border: 1px solid rgba(59,130,246,0.4); color: #93C5FD;
+      padding: 4px 14px; border-radius: 100px; font-size: 12px;
+      font-weight: 600; margin-bottom: 16px;
+    }
+
+    .layout { display: flex; max-width: 1100px; margin: 0 auto; padding: 40px 24px; gap: 32px; }
+
+    /* SIDEBAR NAV */
+    .sidenav {
+      width: 220px; flex-shrink: 0; position: sticky;
+      top: 24px; align-self: flex-start;
+    }
+    .sidenav-inner {
+      background: white; border-radius: 16px;
+      border: 1px solid var(--gray-light); padding: 20px; overflow: hidden;
+    }
+    .sidenav h3 {
+      font-size: 11px; font-weight: 700; color: var(--gray);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px;
+    }
+    .sidenav a {
+      display: flex; align-items: center; gap: 8px;
+      color: #475569; text-decoration: none; font-size: 13px;
+      padding: 6px 8px; border-radius: 8px; margin-bottom: 2px;
+      transition: all 0.15s;
+    }
+    .sidenav a:hover { background: #EFF6FF; color: var(--blue); }
+    .sidenav .section-label {
+      font-size: 10px; font-weight: 700; color: var(--gray);
+      text-transform: uppercase; letter-spacing: 0.1em;
+      margin: 12px 0 4px; padding: 0 8px;
+    }
+
+    /* CONTENT */
+    .content { flex: 1; min-width: 0; }
+
+    .section {
+      background: white; border-radius: 20px;
+      border: 1px solid var(--gray-light); padding: 36px;
+      margin-bottom: 28px; scroll-margin-top: 24px;
+    }
+
+    .section-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
+      padding-bottom: 16px; border-bottom: 1px solid var(--gray-light);
+    }
+    .section-icon { font-size: 32px; }
+    .section-title { font-size: 24px; font-weight: 800; color: var(--navy); }
+    .section-sub { font-size: 13px; color: var(--gray); margin-top: 2px; }
+
+    .section p { font-size: 15px; color: #475569; margin-bottom: 14px; }
+    .section img {
+      width: 100%; border-radius: 12px; border: 1px solid var(--gray-light);
+      box-shadow: 0 4px 20px rgba(15,31,61,0.08); margin: 16px 0;
+    }
+    .section h3 { font-size: 17px; font-weight: 700; color: var(--navy); margin: 20px 0 10px; }
+
+    .tip {
+      display: flex; gap: 12px; background: #EFF6FF;
+      border: 1px solid #BFDBFE; border-radius: 12px; padding: 14px 18px; margin: 14px 0;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; }
+    .tip-text { font-size: 14px; color: #1E40AF; }
+
+    .warning {
+      display: flex; gap: 12px; background: #FFFBEB;
+      border: 1px solid #FDE68A; border-radius: 12px; padding: 14px 18px; margin: 14px 0;
+    }
+    .warning-text { font-size: 14px; color: #92400E; }
+
+    .success {
+      display: flex; gap: 12px; background: #F0FDF4;
+      border: 1px solid #BBF7D0; border-radius: 12px; padding: 14px 18px; margin: 14px 0;
+    }
+    .success-text { font-size: 14px; color: #065F46; }
+
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+    .feature-item {
+      background: #F8FAFC; border: 1px solid var(--gray-light);
+      border-radius: 10px; padding: 14px; font-size: 14px; color: #475569;
+    }
+    .feature-item strong { display: block; color: var(--navy); margin-bottom: 4px; }
+
+    kbd {
+      background: #F1F5F9; border: 1px solid #CBD5E1;
+      border-bottom: 3px solid #94A3B8; border-radius: 6px;
+      padding: 2px 8px; font-size: 12px; font-family: monospace;
+      font-weight: 600; color: var(--navy);
+    }
+
+    .settings-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    .settings-table th {
+      text-align: right; padding: 10px 14px; background: #F8FAFC;
+      border-bottom: 2px solid var(--gray-light); font-size: 13px;
+      color: var(--gray); font-weight: 600;
+    }
+    .settings-table td {
+      padding: 12px 14px; border-bottom: 1px solid #F1F5F9;
+      font-size: 14px; color: #475569; vertical-align: top;
+    }
+    .settings-table tr:last-child td { border-bottom: none; }
+
+    .shortcuts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
+    .shortcut {
+      display: flex; align-items: center; gap: 10px;
+      background: #F8FAFC; border-radius: 8px; padding: 10px 14px;
+    }
+    .shortcut-key { font-size: 12px; }
+    .shortcut-desc { font-size: 13px; color: #475569; }
+
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .sidenav { width: 100%; position: static; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .shortcuts-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-badge">מדריך מלא</div>
+  <h1>פרוטון — כל מה שצריך לדעת 📖</h1>
+  <p>מדריך מפורט לכל 14 המסכים</p>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidenav">
+    <div class="sidenav-inner">
+      <h3>תוכן עניינים</h3>
+
+      <div class="section-label">כללי</div>
+      <a href="#dashboard">🏠 דשבורד</a>
+      <a href="#accounts">🏦 חשבונות</a>
+
+      <div class="section-label">תנועות</div>
+      <a href="#transactions">💳 תנועות</a>
+      <a href="#import">📂 ייבוא מהבנק</a>
+      <a href="#categorize">🏷️ סיווג תנועות</a>
+      <a href="#categories">📁 קטגוריות</a>
+
+      <div class="section-label">ניהול שוטף</div>
+      <a href="#budget">📊 תכנון תקציב</a>
+      <a href="#recurring">🔄 תשלומים והו"ק</a>
+      <a href="#maaser">🕍 מעשרות</a>
+
+      <div class="section-label">התחייבויות</div>
+      <a href="#loans">📉 הלוואות</a>
+      <a href="#insurance">🛡️ ביטוחים</a>
+
+      <div class="section-label">צמיחה</div>
+      <a href="#savings">🎯 יעדי חיסכון</a>
+      <a href="#networth">💎 שווי נקי</a>
+
+      <div class="section-label">מערכת</div>
+      <a href="#settings">⚙️ הגדרות</a>
+      <a href="#shortcuts">⌨️ קיצורי מקשים</a>
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div class="section" id="dashboard">
+      <div class="section-header">
+        <div class="section-icon">🏠</div>
+        <div>
+          <div class="section-title">דשבורד</div>
+          <div class="section-sub">תמונת המצב הפיננסית שלך בזמן אמת</div>
+        </div>
+      </div>
+
+      <img src="dashboard-full.png" alt="דשבורד">
+
+      <p>הדשבורד הוא מסך הבית — כאן תראה בבת אחת את כל מה שחשוב.</p>
+
+      <h3>מה יש בדשבורד?</h3>
+      <div class="feature-grid">
+        <div class="feature-item"><strong>4 KPI עליוניים</strong>הכנסות, הוצאות, יתרה חודשית ויתרת בנקים לחודש שנבחר.</div>
+        <div class="feature-item"><strong>בקרת תקציב</strong>פס התקדמות שמראה כמה % מהתקציב נוצל — ירוק/צהוב/אדום.</div>
+        <div class="feature-item"><strong>שווי נקי</strong>נכסים, התחייבויות ושווי נקי כולל.</div>
+        <div class="feature-item"><strong>גרף השוואתי</strong>הכנסות מול הוצאות ב-6 חודשים אחרונים.</div>
+        <div class="feature-item"><strong>התפלגות הוצאות</strong>דונאט לפי קטגוריות — אפשר לעבור לתצוגת 12 חודש.</div>
+        <div class="feature-item"><strong>מעשרות</strong>חובה, שולם ויתרה לתשלום — ישירות מהדשבורד.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text">בחר חודש מהדרופדאון בפינה השמאלית — כל הווידג'טים מתעדכנים בהתאם.</div>
+      </div>
+    </div>
+
+    <!-- ACCOUNTS -->
+    <div class="section" id="accounts">
+      <div class="section-header">
+        <div class="section-icon">🏦</div>
+        <div>
+          <div class="section-title">חשבונות</div>
+          <div class="section-sub">הצעד הראשון — חובה לפני הכל</div>
+        </div>
+      </div>
+
+      <img src="accounts-full.png" alt="חשבונות">
+
+      <p>כל תנועה במערכת חייבת להיות משויכת לחשבון. בלי חשבון — כלום לא יעבוד.</p>
+
+      <h3>סוגי חשבונות</h3>
+      <div class="feature-grid">
+        <div class="feature-item"><strong>🏦 עו"ש (Bank)</strong>חשבון בנק רגיל. היתרה מחושבת אוטומטית מהתנועות.</div>
+        <div class="feature-item"><strong>💳 אשראי (Credit Card)</strong>כרטיס אשראי. יתרה שלילית = חוב, ומוצגת בהתחייבויות בשווי נקי.</div>
+        <div class="feature-item"><strong>💵 מזומן (Cash)</strong>כסף מזומן. מעקב ידני.</div>
+      </div>
+
+      <div class="warning">
+        <div class="tip-icon">⚠️</div>
+        <div class="warning-text"><strong>יתרת פתיחה:</strong> הזן את היתרה הנוכחית בחשבון — זו נקודת האפס שממנה המערכת מחשבת. אפשר לתקן בכל עת.</div>
+      </div>
+    </div>
+
+    <!-- TRANSACTIONS -->
+    <div class="section" id="transactions">
+      <div class="section-header">
+        <div class="section-icon">💳</div>
+        <div>
+          <div class="section-title">תנועות</div>
+          <div class="section-sub">לב המערכת</div>
+        </div>
+      </div>
+
+      <img src="transactions.png" alt="תנועות">
+
+      <p>מסך התנועות הוא המקום שבו כל הכסף עובר. ברירת המחדל מציגה <strong>כל הזמנים</strong> — אפשר לסנן לפי חודש.</p>
+
+      <h3>עריכה מהירה</h3>
+      <p><strong>לחיצה כפולה</strong> על שורה פותחת עריכה inline — שנה תאריך, סכום, בית עסק וקטגוריה ישירות בטבלה. <kbd>Enter</kbd> לשמור.</p>
+
+      <h3>אקורדיון מפורט</h3>
+      <p><strong>לחיצה אחת</strong> על שורה פותחת אקורדיון עם כל השדות: תאריך ערך, הערות, תגיות, שדות מקושרים (הלוואה, הו"ק, ביטוח, יעד חיסכון) ולינקים לפיצולים וקיזוזים. לחץ <strong>✏️ ערוך הכל</strong> לעריכה מלאה.</p>
+
+      <h3>פעולות מתקדמות</h3>
+      <div class="feature-grid">
+        <div class="feature-item"><strong>📋 שכפול</strong>יוצר תנועה זהה עם תאריך היום. שימושי לתנועות חוזרות.</div>
+        <div class="feature-item"><strong>✂️ פיצול</strong>מפצל תנועה לכמה קטגוריות (למשל קנייה בסופר — מזון + כלי בית).</div>
+        <div class="feature-item"><strong>⚖️ קיזוז</strong>מקזז הוצאה להכנסה. אם שילמת לחבר וקיבלת החזר — זה הכלי.</div>
+        <div class="feature-item"><strong>✓ תקציבי</strong>מתג ירוק/אפור — האם התנועה נספרת בתקציב ובדשבורד.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">👻</div>
+        <div class="tip-text"><strong>תנועות וירטואליות</strong> (בכחול) — תשלומים עתידיים שהמערכת מחשבת מהלוואות ומהו"ק. לחץ <strong>✓ אשר</strong> כדי להפוך אותן לתנועות אמיתיות.</div>
+      </div>
+    </div>
+
+    <!-- IMPORT -->
+    <div class="section" id="import">
+      <div class="section-header">
+        <div class="section-icon">📂</div>
+        <div>
+          <div class="section-title">ייבוא מהבנק</div>
+          <div class="section-sub">הדרך הכי מהירה למלא את המערכת</div>
+        </div>
+      </div>
+
+      <p>ייבוא עובד בשלושה שלבים:</p>
+
+      <h3>שלב 1 — בחירת מקור</h3>
+      <img src="import1.png" alt="ייבוא שלב 1">
+      <p>העלה קובץ Excel/CSV מהבנק. בחר לאיזה חשבון לייבא. אם יש מספר חשבונות בקובץ — בחר "ייבוא מרובה חשבונות" והוסף עמודה מזהה.</p>
+
+      <h3>שלב 2 — מיפוי עמודות</h3>
+      <img src="import2.png" alt="ייבוא שלב 2">
+      <p>מפה כל עמודה לשדה המתאים. שים לב לבחירת מבנה הסכום — עמודה אחת (עם +/−) או שתי עמודות (חובה/זכות).</p>
+
+      <h3>שלב 3 — סקירה ואישור</h3>
+      <img src="import3.png" alt="ייבוא שלב 3">
+      <p>המערכת מזהה כפילויות ומציעה קטגוריות אוטומטיות. עבור על הרשומות, תקן קטגוריות אם צריך, ולחץ ייבא.</p>
+
+      <div class="success">
+        <div class="tip-icon">🤖</div>
+        <div class="success-text"><strong>זיהוי חכם:</strong> המערכת לומדת מכל סיווג ידני. ככל שתסווג יותר — היא תדייק יותר בייבואים הבאים.</div>
+      </div>
+    </div>
+
+    <!-- CATEGORIZE -->
+    <div class="section" id="categorize">
+      <div class="section-header">
+        <div class="section-icon">🏷️</div>
+        <div>
+          <div class="section-title">סיווג תנועות</div>
+          <div class="section-sub">ידיים מהעכבר</div>
+        </div>
+      </div>
+
+      <img src="categorize-full.png" alt="סיווג תנועות">
+
+      <p>כאן תסווג במהירות את כל התנועות שנכנסו ללא קטגוריה.</p>
+
+      <h3>זרימת עבודה מומלצת</h3>
+      <div class="feature-grid">
+        <div class="feature-item"><strong><kbd>Tab</kbd></strong>עובר לדרופדאון הבא.</div>
+        <div class="feature-item"><strong>הקלדת אות</strong>מסנן את הרשימה (מ → מזון, ת → תחבורה).</div>
+        <div class="feature-item"><strong><kbd>Enter</kbd></strong>שומר ועובר לשורה הבאה.</div>
+        <div class="feature-item"><strong>עכבר</strong>לחץ על הדרופדאון לבחירה ויזואלית.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text">מתג "ממתינות / כולן" — ממתינות מסנן רק את מה שטרם סווג. הרשומה נעלמת מיד אחרי סיווג — זה נורמלי!</div>
+      </div>
+    </div>
+
+    <!-- CATEGORIES -->
+    <div class="section" id="categories">
+      <div class="section-header">
+        <div class="section-icon">📁</div>
+        <div>
+          <div class="section-title">קטגוריות</div>
+          <div class="section-sub">בנה את מבנה ההוצאות שלך</div>
+        </div>
+      </div>
+
+      <img src="categories.png" alt="קטגוריות">
+
+      <p>נהל את קטגוריות ההוצאות, הכנסות והחיסכון שלך.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>היררכיה</strong>קטגוריה → תת-קטגוריה (עומק אחד). למשל: תחבורה → דלק, חניה, תחבורה ציבורית.</div>
+        <div class="feature-item"><strong>אייקון וצבע</strong>לכל קטגוריה אפשר לבחור אייקון וצבע — מוצג בכל המסכים.</div>
+        <div class="feature-item"><strong>מיון</strong>גרור עם חיצי ↑↓ או לחץ "מיין א-ת".</div>
+        <div class="feature-item"><strong>השבתה</strong>קטגוריה עם תנועות לא ניתנת למחיקה — רק להשבתה (מוצגת באפור).</div>
+      </div>
+    </div>
+
+    <!-- BUDGET -->
+    <div class="section" id="budget">
+      <div class="section-header">
+        <div class="section-icon">📊</div>
+        <div>
+          <div class="section-title">תכנון תקציב</div>
+          <div class="section-sub">Zero-Based Budgeting</div>
+        </div>
+      </div>
+
+      <img src="budget-full.png" alt="תכנון תקציב">
+
+      <p>הגדר מסגרת לכל קטגוריה לחודש הנבחר. המערכת מחשבת ממוצע 3 חודשים אחרונים כהצעה.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>Auto-save</strong>השינויים נשמרים אוטומטית — אין צורך ללחוץ "שמור".</div>
+        <div class="feature-item"><strong>ייבוא קבועות</strong>לחץ "ייבא קבועות" לייבוא התנועות הקבועות מטאב תשלומים והו"ק.</div>
+        <div class="feature-item"><strong>שכפול</strong>העתק תקציב חודש שלם לחודש הבא.</div>
+        <div class="feature-item"><strong>ממוצע</strong>המספר האפור מתחת לשדה — ממוצע 3 חודשים אחרונים.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text"><strong>הרעיון:</strong> הכנסות פחות כל ההוצאות = 0. כל שקל מקצה לאיפשהו — גם אם לחיסכון.</div>
+      </div>
+    </div>
+
+    <!-- RECURRING -->
+    <div class="section" id="recurring">
+      <div class="section-header">
+        <div class="section-icon">🔄</div>
+        <div>
+          <div class="section-title">תשלומים והוראות קבע</div>
+          <div class="section-sub">עקוב אחרי ההתחייבויות החוזרות</div>
+        </div>
+      </div>
+
+      <img src="recurring.png" alt="תשלומים והו״ק">
+
+      <p>שני סוגים של תנועות חוזרות:</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>🔄 הוראת קבע</strong>חיוב חוזר ללא תאריך סיום — ארנונה, ביטוח, נטפרי. ניתן להשהות.</div>
+        <div class="feature-item"><strong>💳 עסקת תשלומים</strong>סכום קבוע למספר תשלומים מוגדר — קניית מוצר בתשלומים. כולל פס התקדמות.</div>
+      </div>
+
+      <p>המערכת יוצרת <strong>תנועות וירטואליות</strong> לחודשים הקרובים — תראה אותן בטאב תנועות עם כפתור "אשר".</p>
+
+      <div class="tip">
+        <div class="tip-icon">🔗</div>
+        <div class="tip-text"><strong>שייך רשומות:</strong> לחץ על 🔗 כדי לשייך תנועות קיימות להו"ק — המערכת תזהה חפיפות לפי שם וסכום.</div>
+      </div>
+    </div>
+
+    <!-- MAASER -->
+    <div class="section" id="maaser">
+      <div class="section-header">
+        <div class="section-icon">🕍</div>
+        <div>
+          <div class="section-title">מעשרות וחומש</div>
+          <div class="section-sub">בנוי לצרכים ההלכתיים</div>
+        </div>
+      </div>
+
+      <img src="maaser.png" alt="מעשרות">
+
+      <p>המסך מחשב כמה מעשר/חומש חייב לתת לפי ההכנסות החייבות.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>מתג 10%/20%</strong>מעשר או חומש — ניתן לשנות בכל עת.</div>
+        <div class="feature-item"><strong>ניכוי הוצאות</strong>הוצאות מסוימות פטורות — המערכת מנכה אותן מהבסיס החייב.</div>
+        <div class="feature-item"><strong>סטטוס לפי שורה</strong>סמן כל הכנסה כחייבת/פטורה לפי שיקולך.</div>
+        <div class="feature-item"><strong>מעקב תשלום</strong>כמה שולם עד כה ומה נשאר — עם פירוט לחומש (10%+10%).</div>
+      </div>
+    </div>
+
+    <!-- LOANS -->
+    <div class="section" id="loans">
+      <div class="section-header">
+        <div class="section-icon">📉</div>
+        <div>
+          <div class="section-title">מצבת חובות — הלוואות</div>
+          <div class="section-sub">לוח סילוקין מלא</div>
+        </div>
+      </div>
+
+      <img src="loans.png" alt="הלוואות">
+
+      <p>נהל את כל ההלוואות שלך עם לוח סילוקין שפיצר מלא.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>לוח סילוקין</strong>מחושב Runtime — קרן, ריבית, תשלום לכל חודש עד הסוף.</div>
+        <div class="feature-item"><strong>תנועה מקושרת</strong>כל שורה בלוח מציגה אם שולמה בפועל (✓) או ⚠ חסר.</div>
+        <div class="feature-item"><strong>תנועות וירטואליות</strong>תשלומים עתידיים מוצגים בטאב תנועות לאישור.</div>
+        <div class="feature-item"><strong>ארכיון</strong>הלוואות שהסתיימו עוברות לארכיון ולא נמחקות.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text"><strong>תקופת גרייס:</strong> תומך בתקופת גרייס חלקית (ריבית בלבד) או מלאה (ללא תשלום).</div>
+      </div>
+    </div>
+
+    <!-- INSURANCE -->
+    <div class="section" id="insurance">
+      <div class="section-header">
+        <div class="section-icon">🛡️</div>
+        <div>
+          <div class="section-title">ביטוחים</div>
+          <div class="section-sub">מנע כפל ביטוח ועקוב אחרי חידושים</div>
+        </div>
+      </div>
+
+      <img src="insurance.png" alt="ביטוחים">
+
+      <p>עקוב אחרי כל הפוליסות שלך במקום אחד.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>תאריך חידוש</strong>מוצג בצהוב/אדום כשמתקרב — לא תופתע יותר.</div>
+        <div class="feature-item"><strong>חידוש חכם</strong>בעת חידוש — ההיסטוריה נשמרת והמערכת מראה האם התייקר או הוזל.</div>
+        <div class="feature-item"><strong>עלות שנתית</strong>סיכום עלות כל הביטוחים שלך בשנה.</div>
+        <div class="feature-item"><strong>ארכיון</strong>פוליסות שבוטלו נשמרות כהיסטוריה.</div>
+      </div>
+    </div>
+
+    <!-- SAVINGS -->
+    <div class="section" id="savings">
+      <div class="section-header">
+        <div class="section-icon">🎯</div>
+        <div>
+          <div class="section-title">יעדי חיסכון</div>
+          <div class="section-sub">כמה צריך לחסוך כל חודש?</div>
+        </div>
+      </div>
+
+      <img src="savings.png" alt="יעדי חיסכון">
+
+      <p>הגדר יעדים פיננסיים וקבל חישוב PMT אוטומטי — כמה להפקיד כל חודש.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>חישוב PMT</strong>המערכת מחשבת הפקדה חודשית נדרשת לפי ריבית ותאריך יעד.</div>
+        <div class="feature-item"><strong>הפקדה מהירה</strong>לחץ "הפקד/משוך" לרשום הפקדה חדשה או לשייך תנועה קיימת.</div>
+        <div class="feature-item"><strong>ריבית שנתית</strong>הכנס ריבית פיקדון לחישוב מדויק יותר.</div>
+        <div class="feature-item"><strong>פס התקדמות</strong>ויזואליזציה של כמה הגעת מהיעד.</div>
+      </div>
+    </div>
+
+    <!-- NETWORTH -->
+    <div class="section" id="networth">
+      <div class="section-header">
+        <div class="section-icon">💎</div>
+        <div>
+          <div class="section-title">שווי נקי</div>
+          <div class="section-sub">כמה אתה שווה?</div>
+        </div>
+      </div>
+
+      <img src="networth.png" alt="שווי נקי">
+
+      <p>תמונה מלאה של הנכסים וההתחייבויות שלך.</p>
+
+      <div class="feature-grid">
+        <div class="feature-item"><strong>נכסים</strong>חשבונות בנק, נדל"ן, תיק השקעות, פיקדונות ועוד.</div>
+        <div class="feature-item"><strong>התחייבויות</strong>הלוואות, חוב אשראי, אוברדראפט.</div>
+        <div class="feature-item"><strong>קרן חירום</strong>כמה חודשי מחיה יש לך? מוגדר בהגדרות (ברירת מחדל: 3 חודשים).</div>
+        <div class="feature-item"><strong>חובות זמניים</strong>לקחתי מחבר / הלוויתי — ניהול חובות לא רשמיים.</div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text">חשבון בנק עם יתרה שלילית מוצג אוטומטית בהתחייבויות (אוברדראפט) ולא בנכסים.</div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="section" id="settings">
+      <div class="section-header">
+        <div class="section-icon">⚙️</div>
+        <div>
+          <div class="section-title">הגדרות</div>
+          <div class="section-sub">כוונן את המערכת לצרכיך</div>
+        </div>
+      </div>
+
+      <table class="settings-table">
+        <thead>
+          <tr>
+            <th>הגדרה</th>
+            <th>מה זה עושה</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>יום ברירת מחדל</strong></td>
+            <td>כשמוסיפים תנועה על חודש קודם — איזה יום לשים. ברירת מחדל: 25.</td>
+          </tr>
+          <tr>
+            <td><strong>בסיס חישוב תאריך</strong></td>
+            <td>האם הדשבורד מתבסס על תאריך עסקה או תאריך ערך.</td>
+          </tr>
+          <tr>
+            <td><strong>חודשי מחיה בקרן חירום</strong></td>
+            <td>כמה חודשי הוצאות לשמור כקרן חירום. ברירת מחדל: 3.</td>
+          </tr>
+          <tr>
+            <td><strong>שיעור מעשר</strong></td>
+            <td>10% מעשר או 20% חומש.</td>
+          </tr>
+          <tr>
+            <td><strong>חוקי זיהוי</strong></td>
+            <td>כל הכללים שהמערכת למדה לסיווג אוטומטי. ניתן לערוך ולמחוק.</td>
+          </tr>
+          <tr>
+            <td><strong>גיבוי ושחזור</strong></td>
+            <td>ייצוא/ייבוא של בסיס הנתונים כולו כקובץ .db.</td>
+          </tr>
+          <tr>
+            <td><strong>איפוס מערכת</strong></td>
+            <td>מחיקת כל הנתונים. בלתי הפיך — עם אישור כפול.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SHORTCUTS -->
+    <div class="section" id="shortcuts">
+      <div class="section-header">
+        <div class="section-icon">⌨️</div>
+        <div>
+          <div class="section-title">קיצורי מקשים</div>
+          <div class="section-sub">עבוד מהר יותר</div>
+        </div>
+      </div>
+
+      <h3>ניווט בין מסכים</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+1</kbd></div><div class="shortcut-desc">דשבורד</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+2</kbd></div><div class="shortcut-desc">תנועות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+3</kbd></div><div class="shortcut-desc">ייבוא מהבנק</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+4</kbd></div><div class="shortcut-desc">סיווג תנועות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+5</kbd></div><div class="shortcut-desc">תשלומים והו"ק</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+6</kbd></div><div class="shortcut-desc">תכנון תקציב</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+7</kbd></div><div class="shortcut-desc">הלוואות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+8</kbd></div><div class="shortcut-desc">ביטוחים</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+9</kbd></div><div class="shortcut-desc">יעדי חיסכון</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+0</kbd></div><div class="shortcut-desc">שווי נקי</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+מ</kbd></div><div class="shortcut-desc">מעשרות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+ק</kbd></div><div class="shortcut-desc">קטגוריות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+ח</kbd></div><div class="shortcut-desc">חשבונות</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Alt+ה</kbd></div><div class="shortcut-desc">הגדרות</div></div>
+      </div>
+
+      <h3>פעולות</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcut"><div class="shortcut-key"><kbd>Ctrl+N</kbd></div><div class="shortcut-desc">רשומה חדשה</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Ctrl+Shift+N</kbd></div><div class="shortcut-desc">רשומה שנייה (תשלומים/שווי נקי)</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Tab</kbd></div><div class="shortcut-desc">מעבר בין שדות (סיווג תנועות)</div></div>
+        <div class="shortcut"><div class="shortcut-key"><kbd>Enter</kbd></div><div class="shortcut-desc">שמור ועבור הלאה</div></div>
+      </div>
+
+      <div class="tip">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text">קיצורי המקשים עובדים גם עם מקלדת עברית וגם אנגלית.</div>
+      </div>
+    </div>
+
+    <!-- FOOTER NAV -->
+    <div style="background: linear-gradient(135deg, var(--navy), #1a2f5e); border-radius: 20px; padding: 40px; text-align: center; margin-top: 8px;">
+      <h2 style="font-size: 24px; font-weight: 800; color: white; margin-bottom: 12px;">עוד שאלות?</h2>
+      <p style="color: #93C5FD; margin-bottom: 24px;">פתח Issue ב-GitHub ונשמח לעזור</p>
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="quickstart.html" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; font-family: 'Heebo', sans-serif;">📖 מדריך התחלה מהירה</a>
+        <a href="https://github.com/excelnik/proton/issues" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; text-decoration: none; font-family: 'Heebo', sans-serif;">🐛 דווח על באג</a>
+        <a href="index.html" style="background: linear-gradient(135deg, #1E40AF, #3B82F6); color: white; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 700; text-decoration: none; font-family: 'Heebo', sans-serif;">🏠 חזור לדף הבית</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

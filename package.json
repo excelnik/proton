@@ -1,8 +1,9 @@
 {
   "name": "proton",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "פרוטון - מערכת ניהול פיננסי",
   "main": "electron/main.js",
+  "author": "excelnik",
   "scripts": {
     "start": "electron .",
     "dev": "concurrently \"npm run webpack:watch\" \"wait-on dist/bundle.js && electron .\"",
