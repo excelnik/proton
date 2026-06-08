@@ -3,7 +3,7 @@ const path = require('path')
 const os = require('os')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
-const { initCrashLogger } = require('./crashLogger')
+const { initCrashLogger } = require('../crashLogger')
 initCrashLogger(path.join(os.homedir(), 'AppData', 'Roaming', 'proton'))
 
 const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
