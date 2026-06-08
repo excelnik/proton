@@ -421,11 +421,11 @@ function About() {
     React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 } },
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#1E3A8A' },
-        onClick: () => openLink('LINK_MEITAV'), // ← הכנס כאן את הלינק של מיטב
+        onClick: () => openLink('https://landing.meitav.co.il/he-IL/landing/trade/tradeleadsfreinds?utm_medium=7DC21A197FECEFB70B2AE5E475A05030'), // ← הכנס כאן את הלינק של מיטב
       }, '📈 מיטב טרייד'),
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#0F766E' },
-        onClick: () => openLink('LINK_EXCELLENCE'), // ← הכנס כאן את הלינק של אקסלנס
+        onClick: () => openLink('https://xnestrade.xnes.co.il/page/101?customerCode=72f8dafe'), // ← הכנס כאן את הלינק של אקסלנס
       }, '📊 אקסלנס טרייד'),
     ),
     React.createElement('p', { style: { fontSize: 10, color: '#94A3B8', marginTop: 4 } }, 
