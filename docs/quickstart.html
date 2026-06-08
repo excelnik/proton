@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>פרוטון — מדריך התחלה מהירה</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #0F1F3D;
+      --blue: #1E40AF;
+      --blue-light: #3B82F6;
+      --gold: #F59E0B;
+      --green: #10B981;
+      --red: #EF4444;
+      --bg: #F0F4FF;
+      --white: #ffffff;
+      --gray: #64748B;
+      --gray-light: #E2E8F0;
+      --text: #1E293B;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Heebo', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+    }
+
+    /* HEADER */
+    header {
+      background: linear-gradient(135deg, var(--navy), #1a2f5e);
+      padding: 48px 24px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 50%, rgba(59,130,246,0.15) 0%, transparent 60%);
+    }
+
+    .header-badge {
+      display: inline-block;
+      background: rgba(16,185,129,0.2);
+      border: 1px solid rgba(16,185,129,0.4);
+      color: #6EE7B7;
+      padding: 4px 14px;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    header h1 {
+      font-size: 36px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 8px;
+      position: relative;
+    }
+
+    header p {
+      font-size: 16px;
+      color: #93C5FD;
+      position: relative;
+    }
+
+    .time-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(245,158,11,0.2);
+      border: 1px solid rgba(245,158,11,0.3);
+      color: #FCD34D;
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 16px;
+      position: relative;
+    }
+
+    /* MAIN */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* STEP */
+    .step {
+      background: var(--white);
+      border-radius: 20px;
+      border: 1px solid var(--gray-light);
+      padding: 36px;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .step-num {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .step-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .step-subtitle {
+      font-size: 13px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .step p {
+      font-size: 15px;
+      color: #475569;
+      margin-bottom: 16px;
+    }
+
+    .step img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--gray-light);
+      box-shadow: 0 8px 32px rgba(15,31,61,0.08);
+      margin: 16px 0;
+    }
+
+    /* TIP */
+    .tip {
+      display: flex;
+      gap: 12px;
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 16px 0;
+    }
+
+    .tip-icon { font-size: 20px; flex-shrink: 0; }
+
+    .tip-text { font-size: 14px; color: #1E40AF; }
+
+    /* WARNING */
+    .warning {
+      display: flex;
+      gap: 12px;
+      background: #FFFBEB;
+      border: 1px solid #FDE68A;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 16px 0;
+    }
+
+    .warning-text { font-size: 14px; color: #92400E; }
+
+    /* SUCCESS */
+    .success {
+      display: flex;
+      gap: 12px;
+      background: #F0FDF4;
+      border: 1px solid #BBF7D0;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 16px 0;
+    }
+
+    .success-text { font-size: 14px; color: #065F46; }
+
+    /* STEPS LIST */
+    .steps-list {
+      list-style: none;
+      counter-reset: steps;
+    }
+
+    .steps-list li {
+      counter-increment: steps;
+      display: flex;
+      gap: 14px;
+      margin-bottom: 14px;
+      font-size: 15px;
+      color: #475569;
+    }
+
+    .steps-list li::before {
+      content: counter(steps);
+      width: 28px;
+      height: 28px;
+      background: var(--blue-light);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* KEYBOARD */
+    kbd {
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-bottom: 3px solid #94A3B8;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-family: monospace;
+      font-weight: 600;
+      color: var(--navy);
+    }
+
+    /* CONNECTOR */
+    .connector {
+      display: flex;
+      justify-content: center;
+      margin: -16px 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .connector::after {
+      content: '↓';
+      width: 32px;
+      height: 32px;
+      background: var(--blue-light);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    /* FINAL */
+    .final-card {
+      background: linear-gradient(135deg, var(--navy), #1a2f5e);
+      border-radius: 20px;
+      padding: 40px;
+      text-align: center;
+      margin-top: 40px;
+    }
+
+    .final-card h2 {
+      font-size: 28px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    .final-card p {
+      color: #93C5FD;
+      margin-bottom: 24px;
+      font-size: 15px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      padding: 12px 28px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      font-family: 'Heebo', sans-serif;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 12px 28px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      font-family: 'Heebo', sans-serif;
+    }
+
+    /* TOC */
+    .toc {
+      background: white;
+      border-radius: 16px;
+      border: 1px solid var(--gray-light);
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    .toc h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 14px;
+    }
+
+    .toc-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toc-list a {
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toc-list a:hover { text-decoration: underline; }
+
+    strong { color: var(--navy); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-badge">מדריך התחלה מהירה</div>
+  <h1>פרוטון — בואו נתחיל 🚀</h1>
+  <p>מהתקנה לתנועה הראשונה שלך — בכמה דקות</p>
+  <div class="time-badge">⏱ זמן קריאה משוער: 5 דקות</div>
+</header>
+
+<main>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h3>תוכן עניינים</h3>
+    <ul class="toc-list">
+      <li><a href="#install">⬇️ שלב 0 — התקנה</a></li>
+      <li><a href="#accounts">🏦 שלב 1 — הגדרת חשבון</a></li>
+      <li><a href="#import">📂 שלב 2 — ייבוא מהבנק</a></li>
+      <li><a href="#categorize">🏷️ שלב 3 — סיווג תנועות</a></li>
+      <li><a href="#budget">📊 שלב 4 — תכנון תקציב (אופציונלי)</a></li>
+      <li><a href="#next">✨ מה הלאה?</a></li>
+    </ul>
+  </div>
+
+  <!-- STEP 0 -->
+  <div class="step" id="install">
+    <div class="step-header">
+      <div class="step-num">0</div>
+      <div>
+        <div class="step-title">התקנה</div>
+        <div class="step-subtitle">דקה אחת</div>
+      </div>
+    </div>
+
+    <p>הורד את קובץ ההתקנה מהלינק ולחץ פעמיים להתקנה (אם הורדת מהדרייב חלץ והתקן). זהו. אין צורך ב-Node.js, Python, או שום דבר אחר — הכל כבר בפנים.</p>
+
+    <div class="warning">
+      <div class="tip-icon">⚠️</div>
+      <div class="warning-text"><strong>Windows Defender עשוי להזהיר אתכם</strong> — זה נורמלי לתוכנה עצמאית שאינה חתומה. לחץ "מידע נוסף" → "הפעל בכל זאת".</div>
+    </div>
+
+    <div class="tip">
+      <div class="tip-icon">💾</div>
+      <div class="tip-text"><strong>הנתונים שלך</strong> נשמרים ב-<code>AppData\Roaming\proton\proton.db</code>. אפשר לגבות מתפריט ההגדרות.</div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- STEP 1 -->
+  <div class="step" id="accounts">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div>
+        <div class="step-title">🏦 הגדרת חשבון — חובה!</div>
+        <div class="step-subtitle">בלי חשבון המערכת לא תעבוד</div>
+      </div>
+    </div>
+
+    <p>לך ל<strong>חשבונות</strong> בסיידבר ולחץ <strong>"+ הוסף חשבון"</strong>.</p>
+
+    <img src="accounts.png" alt="מסך חשבונות">
+
+    <ul class="steps-list">
+      <li>הזן שם לחשבון (למשל: "לאומי", "מזומן", "ויזה")</li>
+      <li>בחר סוג: עו"ש / אשראי / מזומן</li>
+      <li>הזן יתרת פתיחה — כמה יש לך עכשיו בחשבון. <strong>חשוב לדיוק!</strong></li>
+    </ul>
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div class="tip-text"><strong>לא מעניין אותך לעקוב אחרי יתרה?</strong> פתח חשבון אחד בשם "כללי" עם יתרת פתיחה 0. כל היבוא יכנס לשם.</div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- STEP 2 -->
+  <div class="step" id="import">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div>
+        <div class="step-title">📂 ייבוא מהבנק</div>
+        <div class="step-subtitle">3 שלבים ואתה בפנים</div>
+      </div>
+    </div>
+
+    <p>הורד קובץ Excel מאתר הבנק שלך (בדרך כלל תחת "תנועות בחשבון" → "ייצוא לאקסל"). אחר כך לך ל<strong>ייבוא מהבנק</strong>.</p>
+
+    <p><strong>שלב א — בחירת מקור:</strong> העלה את הקובץ ובחר את החשבון שאליו הוא שייך.</p>
+    <img src="import1.png" alt="שלב 1 - בחירת מקור">
+
+    <p><strong>שלב ב — מיפוי עמודות:</strong> תראה תצוגה מקדימה של הנתונים. בחר איזו עמודה היא התאריך, איזו הסכום ואיזו שם העסק.</p>
+    <img src="import2.png" alt="שלב 2 - מיפוי עמודות">
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div class="tip-text"><strong>סכום:</strong> אם הבנק שלך נותן עמודה אחת עם +/−, בחר "עמודה אחת"והגדר האם מינוס מסומן כתנועה שלילית או חיובית. אם יש שתי עמודות נפרדות לחובה/זכות, בחר "חובה / זכות".</div>
+    </div>
+
+    <p><strong>שלב ג — סקירה ואישור:</strong> המערכת מזהה כפילויות ומציעה קטגוריות אוטומטיות. עבור על הרשומות, תקן אם צריך, ולחץ ייבא.</p>
+    <img src="import3.png" alt="שלב 3 - סקירה ואישור">
+
+    <div class="success">
+      <div class="tip-icon">✅</div>
+      <div class="success-text"><strong>המערכת לומדת!</strong> ככל שתסווג יותר תנועות, הזיהוי האוטומטי יהפוך למדויק יותר.</div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- STEP 3 -->
+  <div class="step" id="categorize">
+    <div class="step-header">
+      <div class="step-num">3</div>
+      <div>
+        <div class="step-title">🏷️ סיווג תנועות</div>
+        <div class="step-subtitle">הדרך המהירה — ידיים על המקלדת</div>
+      </div>
+    </div>
+
+    <p>לך ל<strong>סיווג תנועות</strong>. כאן מופיעות כל התנועות שעוד לא סווגו.</p>
+
+    <img src="categorize.png" alt="מסך סיווג תנועות">
+
+    <p>זרימת העבודה המהירה:</p>
+
+    <ul class="steps-list">
+      <li>לחץ <kbd>Tab</kbd> — עובר לתנועה הבאה</li>
+      <li>הקלד אות — מסנן את הדרופדאון (למשל "מ" → "מזון ושתייה")</li>
+      <li>לחץ <kbd>Enter</kbd> — שומר ועובר לרשומה הבאה</li>
+    </ul>
+
+    <div class="tip">
+      <div class="tip-icon">⚡</div>
+      <div class="tip-text">אם המערכת מסוננת על "ממתינות" — הרשומה נעלמת מהרשימה מיד אחרי הסיווג. זה לא באג, זה פיצ'ר!</div>
+    </div>
+  </div>
+
+  <div class="connector"></div>
+
+  <!-- STEP 4 -->
+  <div class="step" id="budget">
+    <div class="step-header">
+      <div class="step-num">4</div>
+      <div>
+        <div class="step-title">📊 תכנון תקציב</div>
+        <div class="step-subtitle">אופציונלי — אבל שווה</div>
+      </div>
+    </div>
+
+    <p>לאחר שייבאת תנועות, לך ל<strong>תכנון תקציב</strong>. המערכת מציגה ממוצע של 3 חודשים אחרונים לכל קטגוריה — זו נקודת ההתחלה שלך.</p>
+
+    <img src="budget.png" alt="מסך תכנון תקציב">
+
+    <ul class="steps-list">
+      <li>הגדר מסגרת לכל קטגוריה</li>
+      <li>השינויים נשמרים אוטומטית</li>
+      <li>הדשבורד יראה לך אחוז ניצול בזמן אמת</li>
+    </ul>
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div class="tip-text"><strong>Zero-Based Budgeting:</strong> הרעיון הוא להקצות כל שקל. הכנסות פחות הוצאות = 0. אם לא הגעת ל-0, יש לך כסף לחיסכון!</div>
+    </div>
+  </div>
+
+  <!-- STEP 5 - Dashboard -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">✓</div>
+      <div>
+        <div class="step-title">🎉 סיימת! הנה הדשבורד שלך</div>
+        <div class="step-subtitle">תמונת מצב מלאה בזמן אמת</div>
+      </div>
+    </div>
+
+    <img src="dashboard.png" alt="דשבורד">
+
+    <p>הדשבורד מציג: הכנסות, הוצאות, יתרה חודשית, יתרת בנקים, ניצול תקציב, שווי נקי, גרף השוואתי ומעשרות.</p>
+
+    <div class="success">
+      <div class="tip-icon">🏆</div>
+      <div class="success-text">ברוך הבא לפרוטון! עכשיו יש לך תמונה מלאה של הפיננסים שלך.</div>
+    </div>
+  </div>
+
+  <!-- NEXT -->
+  <div class="final-card" id="next">
+    <h2>מה הלאה? ✨</h2>
+    <p>עכשיו שהבסיס קיים, אפשר לצלול לעומק:<br>
+    הלוואות • ביטוחים • יעדי חיסכון • שווי נקי • מעשרות</p>
+    <div class="btn-group">
+      <a href="guide.html" class="btn-primary">📖 מדריך מלא</a>
+      <a href="index.html" class="btn-secondary">🏠 חזור לדף הבית</a>
+      <a href="https://github.com/excelnik/proton/issues" class="btn-secondary">🐛 דווח על באג</a>
+    </div>
+  </div>
+
+</main>
+
+</body>
+</html>
