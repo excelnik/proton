@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>פרוטון — ניהול פיננסי אישי</title>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy: #0F1F3D;
+      --blue: #1E40AF;
+      --blue-light: #3B82F6;
+      --gold: #F59E0B;
+      --green: #10B981;
+      --red: #EF4444;
+      --bg: #F0F4FF;
+      --white: #ffffff;
+      --gray: #64748B;
+      --gray-light: #E2E8F0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Heebo', sans-serif;
+      background: var(--bg);
+      color: var(--navy);
+      overflow-x: hidden;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--navy) 0%, #1a2f5e 50%, #0d1b3e 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 60%),
+                  radial-gradient(circle at 80% 20%, rgba(245, 158, 11, 0.1) 0%, transparent 50%);
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93C5FD;
+      padding: 6px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 32px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.6s ease both;
+    }
+
+    .hero-badge::before {
+      content: '●';
+      color: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .logo-mark {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.7s ease both;
+    }
+
+    .hero h1 {
+      font-size: clamp(42px, 7vw, 80px);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.1;
+      margin-bottom: 20px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.8s ease both;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--gold), #FCD34D);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-sub {
+      font-size: clamp(16px, 2.5vw, 22px);
+      color: #93C5FD;
+      font-weight: 400;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 0.9s ease both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 1s ease both;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--blue), var(--blue-light));
+      color: white;
+      padding: 16px 36px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: 'Heebo', sans-serif;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.3s ease;
+      box-shadow: 0 8px 32px rgba(59, 130, 246, 0.4);
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(59, 130, 246, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 16px 36px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: 'Heebo', sans-serif;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255,255,255,0.2);
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.15);
+      transform: translateY(-2px);
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 48px;
+      margin-top: 64px;
+      position: relative;
+      z-index: 1;
+      animation: fadeDown 1.1s ease both;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #64748B;
+      margin-top: 4px;
+    }
+
+    /* ── SCREENSHOTS ── */
+    .screenshots {
+      padding: 100px 24px;
+      background: var(--white);
+      overflow: hidden;
+    }
+
+    .section-label {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      text-align: center;
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800;
+      color: var(--navy);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      text-align: center;
+      font-size: 16px;
+      color: var(--gray);
+      margin-bottom: 60px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .screenshot-card {
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(15, 31, 61, 0.12);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      position: relative;
+    }
+
+    .screenshot-card:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 32px 80px rgba(15, 31, 61, 0.2);
+    }
+
+    .screenshot-card img {
+      width: 100%;
+      display: block;
+    }
+
+    .screenshot-label {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(15, 31, 61, 0.8);
+      backdrop-filter: blur(8px);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* ── FEATURES ── */
+    .features {
+      padding: 100px 24px;
+      background: var(--bg);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 32px;
+      border: 1px solid var(--gray-light);
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 60px rgba(15, 31, 61, 0.08);
+      border-color: var(--blue-light);
+    }
+
+    .feature-icon {
+      font-size: 36px;
+      margin-bottom: 16px;
+    }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 10px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--gray);
+      line-height: 1.7;
+    }
+
+    /* ── PRIVACY ── */
+    .privacy {
+      padding: 80px 24px;
+      background: linear-gradient(135deg, var(--navy), #1a2f5e);
+      text-align: center;
+    }
+
+    .privacy h2 {
+      font-size: 36px;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 16px;
+    }
+
+    .privacy p {
+      font-size: 16px;
+      color: #93C5FD;
+      max-width: 600px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    .privacy-pills {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── CTA ── */
+    .cta {
+      padding: 100px 24px;
+      background: var(--white);
+      text-align: center;
+    }
+
+    .cta h2 {
+      font-size: clamp(28px, 4vw, 48px);
+      font-weight: 900;
+      color: var(--navy);
+      margin-bottom: 16px;
+    }
+
+    .cta p {
+      font-size: 16px;
+      color: var(--gray);
+      margin-bottom: 40px;
+    }
+
+    .requirements {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-top: 32px;
+      flex-wrap: wrap;
+    }
+
+    .req {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--navy);
+      padding: 32px 24px;
+      text-align: center;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    footer a {
+      color: #64748B;
+      text-decoration: none;
+      margin: 0 12px;
+    }
+
+    footer a:hover { color: var(--blue-light); }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      .screenshots-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .hero-stats { gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">v0.2.0 Beta · קוד פתוח</div>
+
+  <div class="logo-mark">
+    <svg width="80" height="80" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="512" height="512" rx="114" fill="#1E3A8A"/>
+      <line x1="186" y1="126" x2="186" y2="386" stroke="#93C5FD" stroke-width="28" stroke-linecap="round"/>
+      <path d="M186 126 Q346 126 346 226 Q346 326 186 326" fill="none" stroke="#93C5FD" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="266" cy="226" r="48" fill="#F59E0B" opacity="0.9"/>
+      <text x="266" y="242" text-anchor="middle" font-size="36" font-weight="700" fill="#1E3A8A" font-family="serif">₪</text>
+    </svg>
+  </div>
+
+  <h1>פרוטון<br><span>ניהול פיננסי אישי</span></h1>
+  <p class="hero-sub">פשוט, מהיר, פרטי — כל הנתונים שלך על המחשב שלך</p>
+
+  <div class="hero-actions">
+    <a href="https://github.com/excelnik/proton/releases/latest" class="btn-primary">
+      ⬇️ הורד עכשיו — חינם
+    </a>
+    <a href="https://github.com/excelnik/proton" class="btn-secondary">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+      </svg>
+      GitHub
+    </a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-num">150+</div>
+      <div class="stat-label">הורדות</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">14</div>
+      <div class="stat-label">מסכים</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">0₪</div>
+      <div class="stat-label">מחיר</div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section class="screenshots">
+  <p class="section-label">צילומי מסך</p>
+  <h2 class="section-title">תראה מה מחכה לך</h2>
+  <p class="section-sub">ממשק נקי ומהיר שנבנה לעבודה יומיומית אמיתית</p>
+
+  <div class="screenshots-grid">
+    <div class="screenshot-card">
+      <img src="screenshot-dashboard.png" alt="דשבורד">
+      <div class="screenshot-label">דשבורד</div>
+    </div>
+    <div class="screenshot-card">
+      <img src="screenshot-transactions.png" alt="תנועות">
+      <div class="screenshot-label">תנועות</div>
+    </div>
+    <div class="screenshot-card">
+      <img src="screenshot-loans.png" alt="הלוואות">
+      <div class="screenshot-label">מצבת חובות</div>
+    </div>
+    <div class="screenshot-card">
+      <img src="screenshot-networth.png" alt="שווי נקי">
+      <div class="screenshot-label">שווי נקי</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <p class="section-label">פיצ'רים</p>
+  <h2 class="section-title">כל מה שצריך לניהול פיננסי</h2>
+  <p class="section-sub">בנוי לצרכים הספציפיים של המשתמש הישראלי</p>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">דשבורד חכם</div>
+      <div class="feature-desc">תמונת מצב מלאה — הכנסות, הוצאות, תקציב, שווי נקי ומעשרות במקום אחד.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏦</div>
+      <div class="feature-title">ייבוא מהבנק</div>
+      <div class="feature-desc">ייבוא קבצי Excel מכל הבנקים עם זיהוי כפילויות וסיווג אוטומטי חכם.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <div class="feature-title">תכנון תקציב</div>
+      <div class="feature-desc">Zero-based budgeting — הגדר מסגרת לכל קטגוריה ועקוב אחר הביצוע בזמן אמת.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📉</div>
+      <div class="feature-title">מצבת הלוואות</div>
+      <div class="feature-desc">לוח סילוקין שפיצר מלא עם מעקב תשלומים ותנועות וירטואליות אוטומטיות.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💎</div>
+      <div class="feature-title">שווי נקי</div>
+      <div class="feature-desc">נכסים, התחייבויות, קרן חירום דינמית וחובות זמניים — הכל במקום אחד.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🕍</div>
+      <div class="feature-title">מעשרות</div>
+      <div class="feature-desc">חישוב מעשר וחומש עם ניכוי הוצאות פטורות — בנוי לצרכים ההלכתיים.</div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACY -->
+<section class="privacy">
+  <h2>🔒 הנתונים שלך — שלך בלבד</h2>
+  <p>פרוטון שומר את כל המידע הפיננסי שלך מקומית על המחשב. אין שרת, אין ענן, אין מנוי.</p>
+  <div class="privacy-pills">
+    <div class="pill">✓ ללא חיבור לאינטרנט</div>
+    <div class="pill">✓ ללא מנוי</div>
+    <div class="pill">✓ ללא שיתוף נתונים</div>
+    <div class="pill">✓ קוד פתוח — GPL v3</div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <h2>מוכן להתחיל?</h2>
+  <p>הורד עכשיו — חינם לחלוטין, ללא הרשמה</p>
+  <a href="https://github.com/excelnik/proton/releases/latest" class="btn-primary" style="font-size:18px; padding: 18px 48px;">
+    ⬇️ הורד פרוטון v0.2.0
+  </a>
+  <div class="requirements">
+    <div class="req">✓ Windows 10/11</div>
+    <div class="req">✓ 200MB שטח פנוי</div>
+    <div class="req">✓ ללא התקנת תלויות</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom: 12px;">
+    <a href="https://github.com/excelnik/proton">GitHub</a>
+    <a href="https://github.com/excelnik/proton/issues">דיווח על באג</a>
+    <a href="https://github.com/excelnik/proton/releases">גרסאות</a>
+  </p>
+  <p>© 2026 Arie Zalaznik — GPL v3 License</p>
+</footer>
+
+</body>
+</html>
