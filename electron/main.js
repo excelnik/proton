@@ -85,3 +85,7 @@ ipcMain.handle('import-db', async (event, destPath) => {
     return { success: false, error: e.message }
   }
 })
+
+ipcMain.on('quit-app', () => {
+  app.quit()
+})
