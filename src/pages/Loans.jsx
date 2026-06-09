@@ -76,6 +76,7 @@ function Loans() {
   const [deleteMode, setDeleteMode] = useState('keep')
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [prefillTransaction, setPrefillTransaction] = useState(null)
+  const [linkingLoan, setLinkingLoan] = useState(null)
 
   useEffect(() => {
     const handler = e => {
@@ -89,6 +90,18 @@ function Loans() {
   }, [])
 
   function loadLoans() {
+    // ארכיון אוטומטי להלוואות שהסתיימו
+    const activeLiabilities = db.prepare(`
+      SELECT id, first_payment_date, duration_months FROM Liabilities WHERE is_active=1
+    `).all()
+    for (const l of activeLiabilities) {
+      if (!l.first_payment_date || !l.duration_months) continue
+      const end = new Date(l.first_payment_date)
+      end.setMonth(end.getMonth() + l.duration_months - 1)
+      if (new Date() >= end) {
+        db.prepare('UPDATE Liabilities SET is_active=0 WHERE id=?').run(l.id)
+      }
+    }
     const rows = db.prepare('SELECT * FROM Liabilities WHERE is_active=1 ORDER BY id DESC').all()
     const archived = db.prepare('SELECT * FROM Liabilities WHERE is_active=0 ORDER BY id DESC').all()
     setLoans(rows)
@@ -203,6 +216,7 @@ function Loans() {
                 isSelected: selectedLoan?.id === loan.id,
                 onSelect: () => setSelectedLoan(loan),
                 onEdit: () => { setEditLoan(loan); setShowModal(true) },
+                onLink: () => setLinkingLoan(loan),
                 onFinish: () => handleFinish(loan),
                 onDelete: () => handleDelete(loan),
             })),
@@ -303,12 +317,17 @@ function Loans() {
         ),
       )
     ),
+    linkingLoan && React.createElement(LinkModal, {
+      loan: linkingLoan,
+      onClose: () => setLinkingLoan(null),
+      onSave: () => { setLinkingLoan(null); loadLoans() },
+    }),
   )
 }
 
 // ─── כרטיס הלוואה ─────────────────────────────────────────────────────────
 
-function LoanCard({ loan, isSelected, onSelect, onEdit, onFinish, onDelete }) {
+function LoanCard({ loan, isSelected, onSelect, onEdit, onLink, onFinish, onDelete }) {
   const schedule = useMemo(() => generateAmortization(loan), [loan.id])
   const currentIdx = getCurrentMonthIndex(loan)
   const current = schedule[currentIdx]
@@ -346,6 +365,11 @@ function LoanCard({ loan, isSelected, onSelect, onEdit, onFinish, onDelete }) {
             onClick: e => { e.stopPropagation(); onEdit() },
             title: 'ערוך',
           }, '✏️'),
+          React.createElement('button', {
+            style: styles.actionBtn,
+            onClick: e => { e.stopPropagation(); onLink() },
+            title: 'שייך תנועות',
+          }, '🔗'),
           React.createElement('button', {
             style: styles.actionBtn,
             onClick: e => { e.stopPropagation(); onFinish() },
@@ -704,6 +728,61 @@ const styles = {
   modalBody: { padding: 24 },
   modalFooter: { display: 'flex', gap: 8, padding: '16px 24px', borderTop: '1px solid #E2E8F0' },
   input: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', boxSizing: 'border-box' },
+}
+
+function LinkModal({ loan, onClose, onSave }) {
+  const monthlyPayment = loan.total_amount / (loan.duration_months || 1)
+  const minAmount = monthlyPayment * 0.85
+  const maxAmount = monthlyPayment * 1.15
+
+  const candidates = db.prepare(`
+    SELECT t.*, a.name as account_name FROM Transactions t
+    LEFT JOIN Accounts a ON t.account_id=a.id
+    WHERE t.transaction_type='Expense'
+    AND t.liability_id IS NULL
+    AND (t.source IS NULL OR t.source != 'virtual')
+    AND t.amount BETWEEN ? AND ?
+    ORDER BY t.transaction_date DESC
+    LIMIT 50
+  `).all(minAmount, maxAmount)
+
+  const [candidatesList, setCandidates] = useState(candidates)
+
+  function handleLink(txId) {
+    db.prepare('UPDATE Transactions SET liability_id=? WHERE id=?').run(loan.id, txId)
+    setCandidates(prev => prev.filter(t => t.id !== txId))
+  }
+
+  const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL')
+
+  return React.createElement('div', { style: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 } },
+    React.createElement('div', { style: { backgroundColor: '#fff', borderRadius: 20, width: 500, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' } },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E2E8F0' } },
+        React.createElement('h2', { style: { fontSize: 16, fontWeight: 'bold' } }, `🔗 שייך תנועה ל${loan.name}`),
+        React.createElement('button', { style: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }, onClick: onClose }, '✕'),
+      ),
+      React.createElement('div', { style: { overflowY: 'auto', flex: 1, padding: 16 } },
+        candidatesList.length === 0
+          ? React.createElement('p', { style: { color: '#94A3B8', textAlign: 'center', padding: 32 } }, 'אין תנועות לשיוך')
+          : candidatesList.map(tx =>
+              React.createElement('div', {
+                key: tx.id,
+                style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, marginBottom: 6, border: '1px solid #E2E8F0', cursor: 'pointer', backgroundColor: '#F8FAFC' },
+                onClick: () => handleLink(tx.id),
+              },
+                React.createElement('div', null,
+                  React.createElement('p', { style: { fontSize: 13, fontWeight: '600' } }, tx.business_entity || '—'),
+                  React.createElement('p', { style: { fontSize: 11, color: '#94A3B8' } }, tx.transaction_date),
+                ),
+                React.createElement('span', { style: { fontWeight: 'bold', color: '#E11D48' } }, fmt(tx.amount)),
+              )
+            )
+      ),
+      React.createElement('div', { style: { padding: '12px 24px', borderTop: '1px solid #E2E8F0' } },
+        React.createElement('button', { style: { backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '8px 16px', cursor: 'pointer', fontSize: 13 }, onClick: onSave }, 'סגור ושמור'),
+      ),
+    )
+  )
 }
 
 module.exports = Loans

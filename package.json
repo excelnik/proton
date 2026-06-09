@@ -1,6 +1,6 @@
 {
   "name": "proton",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "פרוטון - מערכת ניהול פיננסי",
   "main": "electron/main.js",
   "author": "excelnik",
@@ -19,7 +19,8 @@
       "output": "dist-app"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "Pruton.Setup.exe"
     },
     "files": [
       "electron/**/*",

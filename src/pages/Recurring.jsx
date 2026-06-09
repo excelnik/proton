@@ -34,6 +34,25 @@ function Recurring() {
   }, [])
 
   function loadTemplates() {
+    // ארכיון אוטומטי לתשלומים שהסתיימו
+    const completed = db.prepare(`
+      SELECT id, first_charge_date, num_installments FROM Recurring_Templates
+      WHERE type='installment' AND is_active=1
+    `).all()
+    for (const t of completed) {
+      if (!t.first_charge_date || !t.num_installments) continue
+      const first = new Date(t.first_charge_date)
+      const now = new Date()
+      let count = 0
+      const d = new Date(first)
+      while (d <= now && count < t.num_installments) {
+        count++
+        d.setMonth(d.getMonth() + 1)
+      }
+      if (count >= t.num_installments) {
+        db.prepare('UPDATE Recurring_Templates SET is_active=0 WHERE id=?').run(t.id)
+      }
+    }
     const active = db.prepare(`
       SELECT t.*, c.name as category_name, c.icon as category_icon, a.name as account_name
       FROM Recurring_Templates t
@@ -320,7 +339,18 @@ function RecurringCard({ template: t, fmt, onEdit, onArchive, onDelete, onLink }
 
 function InstallmentCard({ template: t, fmt, onEdit, onFinish, onDelete, onLink }) {
   const [showTxs, setShowTxs] = useState(false)
-  const paid = t.installments_paid || 0
+    const paid = (() => {
+    if (!t.first_charge_date) return t.installments_paid || 0
+    const first = new Date(t.first_charge_date)
+    const now = new Date()
+    let count = 0
+    const d = new Date(first)
+    while (d <= now && count < t.num_installments) {
+      count++
+      d.setMonth(d.getMonth() + 1)
+    }
+    return Math.min(count, t.num_installments)
+  })()
   const total = t.num_installments || 1
   const progress = Math.round((paid / total) * 100)
   const remainingAmount = t.amount * (total - paid)
@@ -605,7 +635,10 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     }
 
     if (withVirtual) {
-      alert(`✓ נוצרו תנועות וירטואליות ל-12 חודשים הקרובים`)
+      const msg = type === 'installment'
+        ? `✓ נוצרו ${parseInt(form.num_installments)} תנועות וירטואליות`
+        : `✓ נוצרו תנועות וירטואליות ל-12 חודשים הקרובים`
+      alert(msg)
     }
     onSave()
   }

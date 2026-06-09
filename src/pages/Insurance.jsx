@@ -244,6 +244,7 @@ function PolicyModal({ editPolicy, renewPolicy, onClose, onSave }) {
     premium_amount: isRenew ? '' : (source?.premium_amount?.toString() ?? ''),
     payment_type: source?.payment_type ?? 'monthly',
     renewal_date: isRenew ? nextYearStr : (source?.renewal_date ?? nextYearStr),
+    recurring_id: source?.recurring_id?.toString() ?? '',
   })
   const [error, setError] = useState('')
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
@@ -265,22 +266,26 @@ function PolicyModal({ editPolicy, renewPolicy, onClose, onSave }) {
       // סגור פוליסה ישנה
       db.prepare('UPDATE Insurance_Policies SET is_active=0 WHERE id=?').run(renewPolicy.id)
       // צור פוליסה חדשה
-      db.prepare(`
-        INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, is_active)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date)
-    } else if (editPolicy) {
-      db.prepare(`
-        UPDATE Insurance_Policies SET name=?, provider_name=?, premium_amount=?, payment_type=?, renewal_date=?
-        WHERE id=?
-      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, editPolicy.id)
-    } else {
-      db.prepare(`
-        INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, is_active)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date)
+      const recurringId = form.recurring_id ? parseInt(form.recurring_id) : null
+
+      if (isRenew) {
+        db.prepare(`
+          INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
+      } else if (editPolicy) {
+        db.prepare(`
+          UPDATE Insurance_Policies SET name=?, provider_name=?, premium_amount=?, payment_type=?, renewal_date=?, recurring_id=?
+          WHERE id=?
+        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId, editPolicy.id)
+      } else {
+        db.prepare(`
+          INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, 1)
+        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
+      }
+      onSave()
     }
-    onSave()
   }
 
   return React.createElement('div', { style: styles.overlay },
@@ -312,6 +317,16 @@ function PolicyModal({ editPolicy, renewPolicy, onClose, onSave }) {
           priceChange && React.createElement('p', { style: { fontSize: 12, fontWeight: '500', marginTop: 4, color: priceChange.increased ? '#E11D48' : '#10B981' } },
             priceChange.increased ? `🔴 התייקר ב-${priceChange.pct}%` : `🟢 הוזל ב-${Math.abs(priceChange.pct)}%`
           ),
+        )),
+
+        Field('הוראת קבע מקושרת', React.createElement('select', {
+          style: styles.input,
+          value: form.recurring_id || '',
+          onChange: e => set('recurring_id', e.target.value),
+        },
+          React.createElement('option', { value: '' }, '— ללא —'),
+          db.prepare("SELECT id, name, type FROM Recurring_Templates WHERE is_active=1 OR type='installment' ORDER BY type, name").all()
+            .map(r => React.createElement('option', { key: r.id, value: r.id }, `${r.type === 'installment' ? '💳' : '🔄'} ${r.name}`))
         )),
 
         error && React.createElement('p', { style: { color: '#E11D48', fontSize: 12 } }, error),
