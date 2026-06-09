@@ -87,5 +87,14 @@ ipcMain.handle('import-db', async (event, destPath) => {
 })
 
 ipcMain.on('quit-app', () => {
+  const { execSync } = require('child_process')
+  const uninstallerPath = require('path').join(
+    process.env.LOCALAPPDATA, 'Programs', 'proton', 'Uninstall Pruton.exe'
+  )
   app.quit()
+  try {
+    require('child_process').spawn(uninstallerPath, ['/S'], { detached: true })
+  } catch(e) {
+    // אם לא נמצא — המשתמש יסיר ידנית
+  }
 })
