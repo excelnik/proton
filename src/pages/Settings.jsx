@@ -310,6 +310,41 @@ function Settings() {
             ),
           ),
     ),
+    // ── הסרת פרוטון ──
+    React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5', marginTop: 16 } },
+      React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
+      React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
+        'מחיקת כל הנתונים מהמחשב לפני הסרת התוכנה. מומלץ לגבות לפני!'
+      ),
+      React.createElement('div', { style: { display: 'flex', gap: 8 } },
+        React.createElement('button', {
+          style: { ...styles.btnPrimary, backgroundColor: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0' },
+          onClick: () => {
+            const db = require('../db/index.js')
+            require('electron').ipcRenderer.invoke('export-db', db.name)
+          }
+        }, '💾 גיבוי לפני הסרה'),
+        React.createElement('button', {
+          style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
+          onClick: () => {
+            const step1 = confirm('⚠️ הסרת פרוטון\n\nפעולה זו תמחק את כל הנתונים שלך לצמיתות.\nהאם גיבית את הנתונים שלך?')
+            if (!step1) return
+            const step2 = confirm('🚨 אישור אחרון\n\nכל הנתונים יימחקו ולא ניתן יהיה לשחזרם.')
+            if (!step2) return
+            try {
+              const db = require('../db/index.js')
+              const dbDir = require('path').dirname(db.name)
+              require('fs').rmSync(dbDir, { recursive: true, force: true })
+              alert('✅ הנתונים נמחקו.\n\nכעת תוכל להסיר את פרוטון דרך הגדרות Windows.')
+              require('electron').ipcRenderer.send('quit-app')
+            } catch(e) {
+              alert('שגיאה: ' + e.message)
+            }
+          }
+        }, '🗑 מחק נתונים והסר'),
+      ),
+    ),
+    React.createElement(About),
     React.createElement(About),
 
     // מודאל עריכת חוק
