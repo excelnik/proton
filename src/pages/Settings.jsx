@@ -46,6 +46,8 @@ function Settings() {
   const [editRule, setEditRule] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetStep, setResetStep] = useState(0)
+  const [deleteStep, setDeleteStep] = useState(0) // 0: כפתור | 1: בדיקה | 2: מחיקה
+  const [deleteMessage, setDeleteMessage] = useState('')
 
   function loadRules() {
     const rows = db.prepare(`
@@ -123,6 +125,84 @@ function Settings() {
     setShowResetConfirm(false)
     setResetStep(0)
     alert('✓ המערכת אופסה. כל הנתונים נמחקו.')
+  }
+
+  // ──── מחיקה בטוחה של נתונים ────
+  async function handleDeleteData() {
+    if (deleteStep === 0) {
+      // שלב 1: בדוק אם המשתמש רוצה לגבות
+      const shouldBackup = confirm(
+        '⚠️ הסרת פרוטון\n\n' +
+        'מומלץ מאוד לגבות את הנתונים לפני המחיקה!\n\n' +
+        'לחץ OK כדי לגבות, או Cancel כדי להמשיך ללא גיבוי.'
+      )
+      
+      if (shouldBackup) {
+        // גבה את הנתונים
+        try {
+          const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
+          const result = await ipcRenderer.invoke('export-db', dbPath)
+          if (!result.success && !result.cancelled) {
+            alert('⚠️ שגיאה בגיבוי: ' + result.error)
+            return
+          }
+          if (result.cancelled) {
+            alert('⚠️ ביטלת את הגיבוי. להמשך מחיקה?')
+          } else {
+            alert('✓ גיבוי בוצע בהצלחה:\n' + result.path)
+          }
+        } catch (e) {
+          alert('⚠️ שגיאה בגיבוי: ' + e.message)
+          return
+        }
+      }
+
+      // עבור לשלב 2: אישור סופי
+      setDeleteStep(1)
+      setDeleteMessage('🚨 אישור אחרון\n\nכל הנתונים יימחקו ופרוטון יסגר.\nפעולה זו לא ניתנת לביטול!')
+      return
+    }
+
+    if (deleteStep === 1) {
+      // שלב 2: אישור סופי
+      const confirmed = confirm(deleteMessage)
+      if (!confirmed) {
+        setDeleteStep(0)
+        setDeleteMessage('')
+        return
+      }
+
+      // שלב 3: מחיקה בטוחה
+      setDeleteStep(2)
+      setDeleteMessage('🔄 מוחק נתונים...')
+
+      try {
+        const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
+        
+        // סגור את ה-Database
+        db.close()
+        
+        // קרא ל-safe-delete-db handler
+        const result = await ipcRenderer.invoke('safe-delete-db', dbPath)
+        
+        if (result.success) {
+          setDeleteMessage('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון:\n1. הפעל > appwiz.cpl\n2. חפש "Pruton" ו-Uninstall')
+          alert('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון דרך:\nהגדרות > אפליקציות > הסר אפליקציה')
+          
+          // סגור את האפליקציה
+          setTimeout(() => {
+            ipcRenderer.send('quit-app')
+          }, 1000)
+        } else {
+          setDeleteMessage('❌ שגיאה בעת מחיקה: ' + result.error)
+          setDeleteStep(0)
+        }
+      } catch (e) {
+        setDeleteMessage('❌ שגיאה: ' + e.message)
+        setDeleteStep(0)
+        alert('שגיאה: ' + e.message)
+      }
+    }
   }
 
   const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 })
@@ -310,43 +390,37 @@ function Settings() {
             ),
           ),
     ),
-    // ── הסרת פרוטון ──
+
+    // ── הסרת פרוטון (בטוחה) ──
     React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5', marginTop: 16 } },
       React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
       React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-        'מחיקת כל הנתונים מהמחשב לפני הסרת התוכנה. מומלץ לגבות לפני!'
+        'מחיקה בטוחה של הנתונים, עם אפשרות לגיבוי.'
       ),
-      React.createElement('div', { style: { display: 'flex', gap: 8 } },
-        React.createElement('button', {
-          style: { ...styles.btnPrimary, backgroundColor: '#F8FAFC', color: '#475569', border: '1px solid #E2E8F0' },
-          onClick: () => {
-            const db = require('../db/index.js')
-            require('electron').ipcRenderer.invoke('export-db', db.name)
-          }
-        }, '💾 גיבוי לפני הסרה'),
-        React.createElement('button', {
-          style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
-          onClick: () => {
-            const step1 = confirm('⚠️ הסרת פרוטון\n\nפעולה זו תמחק את כל הנתונים שלך לצמיתות.\nהאם גיבית את הנתונים שלך?')
-            if (!step1) return
-            const step2 = confirm('🚨 אישור אחרון\n\nכל הנתונים יימחקו ולא ניתן יהיה לשחזרם.')
-            if (!step2) return
-            try {
-              const db = require('../db/index.js')
-              const dbDir = require('path').dirname(db.name)
-              // סגור את ה-DB לפני המחיקה
-              db.close()
-              // מחק רק את הDB, לא את כל התיקייה
-              require('fs').rmSync(db.name, { force: true })
-              //alert('✅ הנתונים נמחקו.\n\nכעת תוכל להסיר את פרוטון דרך הגדרות Windows.')
-              require('electron').ipcRenderer.send('quit-app')
-            } catch(e) {
-              alert('שגיאה: ' + e.message)
-            }
-          }
-        }, '🗑 מחק נתונים והסר'),
-      ),
+
+      deleteStep === 0
+        ? React.createElement('button', {
+            style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
+            onClick: handleDeleteData,
+          }, '🗑 הסר את פרוטון')
+        : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 16 } },
+            React.createElement('p', { style: { fontSize: 13, color: '#E11D48', marginBottom: 12, fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' } }, deleteMessage),
+            deleteStep === 1 && React.createElement('div', { style: { display: 'flex', gap: 8 } },
+              React.createElement('button', {
+                style: styles.btnSecondary,
+                onClick: () => { setDeleteStep(0); setDeleteMessage('') },
+              }, 'ביטול'),
+              React.createElement('button', {
+                style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
+                onClick: handleDeleteData,
+              }, 'אישור'),
+            ),
+            deleteStep === 2 && React.createElement('div', { style: { textAlign: 'center' } },
+              React.createElement('p', { style: { fontSize: 12, color: '#94A3B8', marginTop: 8 } }, 'מחכה...')
+            ),
+          ),
     ),
+
     React.createElement(About),
 
     // מודאל עריכת חוק
@@ -358,7 +432,7 @@ function Settings() {
   )
 }
 
-// ─── מודאל עריכת חוק ─────────────────────────────────────────────────────
+// ─── מודאל עריכת חוק ───────────────────────────────────────────────────
 
 function EditRuleModal({ rule, onClose, onSave }) {
   const categories = db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY sort_order').all()
@@ -458,11 +532,11 @@ function About() {
     React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 } },
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#1E3A8A' },
-        onClick: () => openLink('https://landing.meitav.co.il/he-IL/landing/trade/tradeleadsfreinds?utm_medium=7DC21A197FECEFB70B2AE5E475A05030'), // ← הכנס כאן את הלינק של מיטב
+        onClick: () => openLink('https://landing.meitav.co.il/he-IL/landing/trade/tradeleadsfreinds?utm_medium=7DC21A197FECEFB70B2AE5E475A05030'),
       }, '📈 מיטב טרייד'),
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#0F766E' },
-        onClick: () => openLink('https://xnestrade.xnes.co.il/page/101?customerCode=72f8dafe'), // ← הכנס כאן את הלינק של אקסלנס
+        onClick: () => openLink('https://xnestrade.xnes.co.il/page/101?customerCode=72f8dafe'),
       }, '📊 אקסלנס טרייד'),
     ),
     React.createElement('p', { style: { fontSize: 10, color: '#94A3B8', marginTop: 4 } }, 
@@ -477,7 +551,7 @@ function About() {
     React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 } },
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#FBBF24', color: '#0F172A' },
-        onClick: () => openLink('LINK_COFFEE'), // ← הכנס כאן את הלינק של Buy Me a Coffee
+        onClick: () => openLink('LINK_COFFEE'),
       }, '☕ פרגנו לי בקפה'),
       React.createElement('button', {
         style: styles.btnSecondary,
@@ -490,10 +564,10 @@ function About() {
             width: 16, height: 16, viewBox: '0 0 24 24', fill: 'currentColor'
           },
             React.createElement('path', { 
-              d: 'M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z'
+              d: 'M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 . 405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.016 12.016 0 0 0 24 12c0-6.63-5.37-12-12-12z'
             })
           ),
-          '' //תזכורת להוספת טקסט בהמשך
+          'GitHub'
         )
       ),
     ),
