@@ -19,20 +19,43 @@ const Categories = require('./pages/Categories.jsx')
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
   const [selectedMonth, setSelectedMonth] = useState('all')
+  const [updateNotification, setUpdateNotification] = useState(null)
 
   useEffect(() => {
     const { ipcRenderer } = require('electron')
     
+    // עדכון זמין - הצג הודעה שקטה
     ipcRenderer.on('update-available', () => {
-      // הודעה שקטה — לא מפריעה
-      console.log('עדכון זמין')
+      console.log('✓ עדכון חדש זמין')
+      setUpdateNotification({
+        type: 'available',
+        message: 'עדכון חדש זמין. מורידים...',
+      })
     })
     
+    // עדכון הורד - שאל את המשתמש
     ipcRenderer.on('update-downloaded', () => {
-      if (confirm('עדכון חדש הורד ומוכן להתקנה. להפעיל מחדש עכשיו?')) {
-        ipcRenderer.send('restart-app')
-      }
+      console.log('✓ עדכון הורד וערוך להתקנה')
+      setUpdateNotification({
+        type: 'downloaded',
+        message: 'עדכון חדש הורד ומוכן להתקנה',
+      })
     })
+
+    // שגיאה בעדכון
+    ipcRenderer.on('update-error', (error) => {
+      console.error('שגיאה בעדכון:', error)
+      setUpdateNotification({
+        type: 'error',
+        message: 'שגיאה בעדכון: ' + error,
+      })
+    })
+
+    return () => {
+      ipcRenderer.removeAllListeners('update-available')
+      ipcRenderer.removeAllListeners('update-downloaded')
+      ipcRenderer.removeAllListeners('update-error')
+    }
   }, [])
 
   useEffect(() => {
@@ -85,6 +108,29 @@ function App() {
     React.createElement(Sidebar, { currentPage, onNavigate: setCurrentPage }),
     React.createElement('main', { style: styles.main },
       renderPage()
+    ),
+    // הודעת עדכון
+    updateNotification && React.createElement('div', { style: { ...styles.updateBanner, ...(updateNotification.type === 'error' ? styles.errorBanner : updateNotification.type === 'downloaded' ? styles.successBanner : styles.infoBanner) } },
+      React.createElement('div', { style: styles.updateContent },
+        React.createElement('span', null, updateNotification.message),
+        updateNotification.type === 'downloaded' && React.createElement('div', { style: { marginTop: 8, display: 'flex', gap: 8 } },
+          React.createElement('button', {
+            style: { ...styles.updateBtn, backgroundColor: '#10B981', color: 'white' },
+            onClick: () => {
+              const { ipcRenderer } = require('electron')
+              ipcRenderer.send('restart-app')
+            }
+          }, '✓ הפעל מחדש עכשיו'),
+          React.createElement('button', {
+            style: { ...styles.updateBtn, backgroundColor: '#94A3B8', color: 'white' },
+            onClick: () => setUpdateNotification(null)
+          }, 'מאוחר יותר')
+        )
+      ),
+      React.createElement('button', {
+        style: styles.closeBanner,
+        onClick: () => setUpdateNotification(null)
+      }, '✕')
     )
   )
 }
@@ -101,6 +147,58 @@ const styles = {
     flex: 1,
     overflowY: 'auto',
     backgroundColor: '#F8FAFC',
+  },
+  updateBanner: {
+    position: 'fixed',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    padding: 16,
+    borderRadius: 10,
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    zIndex: 1000,
+    animation: 'slideUp 0.3s ease-out',
+  },
+  infoBanner: {
+    backgroundColor: '#DBEAFE',
+    color: '#1D4ED8',
+    borderLeft: '4px solid #2563EB',
+  },
+  successBanner: {
+    backgroundColor: '#D1FAE5',
+    color: '#065F46',
+    borderLeft: '4px solid #10B981',
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    color: '#991B1B',
+    borderLeft: '4px solid #EF4444',
+  },
+  updateContent: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: '1.5',
+  },
+  updateBtn: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  closeBanner: {
+    background: 'none',
+    border: 'none',
+    fontSize: 18,
+    cursor: 'pointer',
+    padding: 0,
+    color: 'inherit',
+    opacity: 0.6,
   },
 }
 
