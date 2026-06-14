@@ -10,6 +10,8 @@ const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
 process.env.PROTON_DB_PATH = DB_PATH
 
 let mainWindow
+let updateAvailable = false
+let updateDownloaded = false
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -29,14 +31,25 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../public/index.html'))
 
+  // בדוק עדכונים כל שעה, לא באופן מיידי
   autoUpdater.checkForUpdatesAndNotify()
+  setInterval(() => {
+    autoUpdater.checkForUpdates()
+  }, 60 * 60 * 1000) // כל שעה
 
   autoUpdater.on('update-available', () => {
+    updateAvailable = true
     mainWindow.webContents.send('update-available')
   })
 
   autoUpdater.on('update-downloaded', () => {
+    updateDownloaded = true
     mainWindow.webContents.send('update-downloaded')
+  })
+
+  autoUpdater.on('error', (error) => {
+    console.error('עדכון שגיאה:', error)
+    mainWindow.webContents.send('update-error', error.message)
   })
 
   mainWindow.once('ready-to-show', () => {
@@ -54,10 +67,16 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
 
+// ──── עדכון אוטומטי ────
 ipcMain.on('restart-app', () => {
-  autoUpdater.quitAndInstall()
+  if (updateDownloaded) {
+    autoUpdater.quitAndInstall()
+  } else {
+    app.quit()
+  }
 })
 
+// ──── ייצוא גיבוי ────
 ipcMain.handle('export-db', async (event, srcPath) => {
   try {
     const { filePath } = await dialog.showSaveDialog({
@@ -72,6 +91,7 @@ ipcMain.handle('export-db', async (event, srcPath) => {
   }
 })
 
+// ──── ייבוא גיבוי ────
 ipcMain.handle('import-db', async (event, destPath) => {
   try {
     const { filePaths } = await dialog.showOpenDialog({
@@ -86,15 +106,31 @@ ipcMain.handle('import-db', async (event, destPath) => {
   }
 })
 
-ipcMain.on('quit-app', () => {
-  const { execSync } = require('child_process')
-  const uninstallerPath = require('path').join(
-    process.env.LOCALAPPDATA, 'Programs', 'proton', 'Uninstall Pruton.exe'
-  )
-  app.quit()
+// ──── מחיקת בטוחה של נתונים + סגירה (ללא הסרה אוטומטית) ────
+ipcMain.handle('safe-delete-db', async (event, dbPath) => {
   try {
-    require('child_process').spawn(uninstallerPath, ['/S'], { detached: true })
-  } catch(e) {
-    // אם לא נמצא — המשתמש יסיר ידנית
+    // בדוק אם הקובץ קיים
+    if (!fs.existsSync(dbPath)) {
+      return { success: false, error: 'קובץ נתונים לא נמצא' }
+    }
+
+    // מחק את הקובץ
+    fs.rmSync(dbPath, { force: true })
+    
+    // וודא שנמחק
+    if (fs.existsSync(dbPath)) {
+      return { success: false, error: 'לא הצלחנו למחוק את קובץ הנתונים' }
+    }
+
+    return { success: true, message: 'הנתונים נמחקו בהצלחה' }
+  } catch (e) {
+    return { success: false, error: e.message }
   }
+})
+
+// ──── סגירת אפליקציה נקייה (ללא הסרה אוטומטית) ────
+ipcMain.on('quit-app', () => {
+  // סגור את האפליקציה בלבד
+  // לא נריץ Uninstall Pruton.exe — תן למשתמש להסיר באופן ידני
+  app.quit()
 })
