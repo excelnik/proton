@@ -18,15 +18,11 @@ const Categories = require('./pages/Categories.jsx')
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-<<<<<<< HEAD
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
-=======
-  const [selectedMonth, setSelectedMonth] = useState('all')
   const [updateNotification, setUpdateNotification] = useState(null)
->>>>>>> 81a48a1208b4a587ae63e3ada1204e34d5cde6bb
 
   useEffect(() => {
     const { ipcRenderer } = require('electron')
