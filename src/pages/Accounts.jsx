@@ -70,6 +70,31 @@ function Accounts() {
                 style: { ...styles.btnSecondary, width: '100%', marginTop: 12, fontSize: 12 },
                 onClick: () => { setEditAccount(acc); setShowModal(true) },
               }, '✏️ ערוך חשבון'),
+              React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 12 } },
+                React.createElement('button', {
+                  style: { ...styles.btnSecondary, flex: 1, fontSize: 12 },
+                  onClick: () => {
+                    db.prepare('UPDATE Accounts SET is_active=? WHERE id=?').run(acc.is_active ? 0 : 1, acc.id)
+                    loadAccounts()
+                  },
+                }, acc.is_active ? '⏸ השבת' : '✓ הפעל'),
+                React.createElement('button', {
+                  style: { ...styles.btnSecondary, flex: 1, fontSize: 12, color: '#E11D48', borderColor: '#FCA5A5' },
+                  onClick: () => {
+                    const txCount = db.prepare('SELECT COUNT(*) as c FROM Transactions WHERE account_id=?').get(acc.id).c
+                    if (txCount > 0) {
+                      alert(`לא ניתן למחוק — יש ${txCount} תנועות משויכות.\n\nהשבת את החשבון במקום זאת.`)
+                      return
+                    }
+                    if (!confirm(`למחוק את חשבון "${acc.name}"?`)) return
+                    db.prepare('DELETE FROM Accounts WHERE id=?').run(acc.id)
+                    setAccounts([])
+                    loadAccounts()
+                    setShowModal(false)
+                    setEditAccount(null)
+                  },
+                }, '🗑 מחק'),
+              ),
             )
           )
         ),

@@ -706,29 +706,29 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       accounts,
       selectedMonth,
       onClose: () => setShowModal(false),
-      onSave: () => { setShowModal(false); loadData() },
+      onSave: () => { setShowModal(false); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),
 
     duplicateTx && React.createElement(DuplicateModal, {
       tx: duplicateTx,
       categories,
       accounts,
-      onClose: () => setDuplicateTx(null),
-      onSave: () => { setDuplicateTx(null); loadData() },
+      onClose: () => { setDuplicateTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null) },
+      onSave: () => { setDuplicateTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),
 
     splitTx && React.createElement(SplitModal, {
       tx: splitTx,
       categories,
-      onClose: () => setSplitTx(null),
-      onSave: () => { setSplitTx(null); loadData() },
+      onClose: () => { setSplitTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null) },
+      onSave: () => { setSplitTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),
 
     offsetTx && React.createElement(OffsetModal, {
       tx: offsetTx,
       categories,
-      onClose: () => setOffsetTx(null),
-      onSave: () => { setOffsetTx(null); loadData() },
+      onClose: () => { setOffsetTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null) },
+      onSave: () => { setOffsetTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),
   )
 }

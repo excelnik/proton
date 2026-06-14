@@ -446,7 +446,7 @@ function About() {
       React.createElement('text', { x: 266, y: 242, textAnchor: 'middle', fontSize: 36, fontWeight: 700, fill: '#1E3A8A', fontFamily: 'serif' }, '₪'),
     ),
       React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A' } }, 'פרוטון'),
-      React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 4 } }, 'v0.2.1 Beta'),
+      React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 4 } }, 'v0.2.3 Beta'),
       React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
     ),
 

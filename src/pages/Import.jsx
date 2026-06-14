@@ -586,11 +586,23 @@ function Import({ onNavigate }) {
             React.createElement('button', { style: styles.btnSecondary, onClick: () => setStep(1) }, 'חזור'),
             React.createElement('button', {
               style: { ...styles.btnPrimary, backgroundColor: '#10B981' },
-              onClick: () => handleImport(false),
+              onClick: () => {
+                if (reviewRows.every(r => !r.accountId)) {
+                  alert('⚠️ לא נבחר חשבון — לא ניתן לייבא')
+                  return
+                }
+                handleImport(false)
+              },
             }, `ייבא ${newCount} ללא כפולות`),
             React.createElement('button', {
               style: styles.btnPrimary,
-              onClick: () => handleImport(true),
+              onClick: () => {
+                if (reviewRows.every(r => !r.accountId)) {
+                  alert('⚠️ לא נבחר חשבון — לא ניתן לייבא')
+                  return
+                }
+                handleImport(false)
+              },
             }, `ייבא הכל (${reviewRows.length})`),
           )
         ),
