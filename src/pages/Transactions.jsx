@@ -151,6 +151,11 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
   const [duplicateTx, setDuplicateTx] = useState(null)
   const [splitTx, setSplitTx] = useState(null)
   const [offsetTx, setOffsetTx] = useState(null)
+  const [searchText, setSearchText] = useState('')
+  const [filterPanel, setFilterPanel] = useState(false)
+  const [filters, setFilters] = useState({ type: '', categoryId: '', accountId: '', amountMin: '', amountMax: '', dateFrom: '', dateTo: '', txId: '', tags: '', linkedType: '' })
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', dir: 'desc' })
 
   useEffect(() => {
     const handler = e => {
@@ -219,17 +224,16 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
         transaction_date=?, value_date=?, amount=?, business_entity=?,
         category_id=?, account_id=?, description=?, tags=?,
         is_budgetary=?, is_maaser_obligated=?,
-        liability_id=?, recurring_id=?, savings_goal_id=?, insurance_id=?
+        liability_id=?, recurring_id=?, insurance_id=?
       WHERE id=?
     `).run(
       editForm.transaction_date, editForm.value_date || null,
       parseFloat(editForm.amount), editForm.business_entity,
-      editForm.category_id || null, editForm.account_id,
+      editForm.sub_category_id || editForm.category_id || null, editForm.account_id,
       editForm.description || null, editForm.tags || null,
       editForm.is_budgetary ? 1 : 0, editForm.is_maaser_obligated ? 1 : 0,
       editForm.liability_id || null, editForm.recurring_id || null,
-      editForm.savings_goal_id || null, editForm.insurance_id || null,
-      editForm.sub_category_id || editForm.category_id || null,
+      editForm.insurance_id || null,
       txId
     )
     setEditingFull(null)
@@ -335,9 +339,197 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
         label: new Date(r.month + '-01').toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
       }))
       .filter(r => r.label !== 'Invalid Date')
-  }, [])
+    }, [])
 
-  return React.createElement('div', { style: styles.page },
+    const visibleTransactions = transactions.filter(tx => {
+      if (searchText) {
+        const q = searchText.toLowerCase()
+        const inDesc = (tx.description || '').toLowerCase().includes(q)
+        const inEntity = (tx.business_entity || '').toLowerCase().includes(q)
+        if (!inDesc && !inEntity) return false
+      }
+      if (filters.type && tx.transaction_type !== filters.type) return false
+      if (filters.categoryId && String(tx.category_id) !== filters.categoryId) return false
+      if (filters.accountId && String(tx.account_id) !== filters.accountId) return false
+      if (filters.amountMin && tx.amount < parseFloat(filters.amountMin)) return false
+      if (filters.amountMax && tx.amount > parseFloat(filters.amountMax)) return false
+      if (filters.dateFrom && tx.transaction_date < filters.dateFrom) return false
+      if (filters.dateTo && tx.transaction_date > filters.dateTo) return false
+      if (filters.txId && !String(tx.id).includes(filters.txId)) return false
+      if (filters.tags && !(tx.tags || '').toLowerCase().includes(filters.tags.toLowerCase())) return false
+      if (filters.linkedType === 'loan' && !tx.liability_id) return false
+      if (filters.linkedType === 'recurring' && !tx.recurring_id) return false
+      if (filters.linkedType === 'insurance' && !tx.insurance_id) return false
+      return true
+    })
+
+    const sortedTransactions = React.useMemo(() => {
+      const arr = [...visibleTransactions]
+      const { key, dir } = sortConfig
+      arr.sort((a, b) => {
+        let aVal = a[key] ?? ''
+        let bVal = b[key] ?? ''
+        if (key === 'amount') { aVal = Number(aVal); bVal = Number(bVal) }
+        if (aVal < bVal) return dir === 'asc' ? -1 : 1
+        if (aVal > bVal) return dir === 'asc' ? 1 : -1
+        return 0
+      })
+      return arr
+    }, [visibleTransactions, sortConfig])
+
+  return React.createElement('div', { style: { ...styles.page, position: 'relative', display: 'flex', gap: 0 } },
+
+  // ─── פאנל סינון צדדי ───
+  filterPanel && React.createElement('div', {
+    style: {
+      width: 260, minWidth: 260, backgroundColor: '#F8FAFC',
+      borderLeft: '1px solid #E2E8F0', padding: 20,
+      overflowY: 'auto', height: '100vh',
+      position: 'sticky', top: 0, alignSelf: 'flex-start',
+    }
+  },
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 } },
+      React.createElement('h3', { style: { fontSize: 14, fontWeight: '600', color: '#0F172A' } }, 'סינון'),
+      React.createElement('button', {
+        style: { background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16 },
+        onClick: () => setFilterPanel(false),
+      }, '✕'),
+    ),
+
+    // סוג
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'סוג תנועה'),
+      React.createElement('select', {
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13 },
+        value: filters.type,
+        onChange: e => setFilters(f => ({ ...f, type: e.target.value })),
+      },
+        React.createElement('option', { value: '' }, 'הכל'),
+        React.createElement('option', { value: 'Income' }, 'הכנסה'),
+        React.createElement('option', { value: 'Expense' }, 'הוצאה'),
+        React.createElement('option', { value: 'Savings' }, 'חיסכון'),
+        React.createElement('option', { value: 'Transfer' }, 'העברה'),
+      ),
+    ),
+
+    // קטגוריה
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'קטגוריה'),
+      React.createElement('select', {
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13 },
+        value: filters.categoryId,
+        onChange: e => setFilters(f => ({ ...f, categoryId: e.target.value })),
+      },
+        React.createElement('option', { value: '' }, 'הכל'),
+        categories.map(c => React.createElement('option', { key: c.id, value: String(c.id) }, `${c.icon || ''} ${c.name}`))
+      ),
+    ),
+
+    // חשבון
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'חשבון'),
+      React.createElement('select', {
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13 },
+        value: filters.accountId,
+        onChange: e => setFilters(f => ({ ...f, accountId: e.target.value })),
+      },
+        React.createElement('option', { value: '' }, 'הכל'),
+        accounts.map(a => React.createElement('option', { key: a.id, value: String(a.id) }, a.name))
+      ),
+    ),
+
+    // טווח סכום
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'סכום מינימום'),
+      React.createElement('input', {
+        type: 'number',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        placeholder: '0',
+        value: filters.amountMin,
+        onChange: e => setFilters(f => ({ ...f, amountMin: e.target.value })),
+      }),
+    ),
+    React.createElement('div', { style: { marginBottom: 20 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'סכום מקסימום'),
+      React.createElement('input', {
+        type: 'number',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        placeholder: '99999',
+        value: filters.amountMax,
+        onChange: e => setFilters(f => ({ ...f, amountMax: e.target.value })),
+      }),
+    ),
+
+    // תאריך מ
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'מתאריך'),
+      React.createElement('input', {
+        type: 'date',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        value: filters.dateFrom,
+        onChange: e => setFilters(f => ({ ...f, dateFrom: e.target.value })),
+      }),
+    ),
+
+    // תאריך עד
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'עד תאריך'),
+      React.createElement('input', {
+        type: 'date',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        value: filters.dateTo,
+        onChange: e => setFilters(f => ({ ...f, dateTo: e.target.value })),
+      }),
+    ),
+
+    // ID
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'מזהה תנועה (ID)'),
+      React.createElement('input', {
+        type: 'text',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        placeholder: '123',
+        value: filters.txId,
+        onChange: e => setFilters(f => ({ ...f, txId: e.target.value })),
+      }),
+    ),
+
+    // תגיות
+    React.createElement('div', { style: { marginBottom: 14 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'תגית'),
+      React.createElement('input', {
+        type: 'text',
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13, boxSizing: 'border-box' },
+        placeholder: 'חפש תגית...',
+        value: filters.tags,
+        onChange: e => setFilters(f => ({ ...f, tags: e.target.value })),
+      }),
+    ),
+
+    // סוג קישור
+    React.createElement('div', { style: { marginBottom: 20 } },
+      React.createElement('label', { style: { fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 } }, 'קישור'),
+      React.createElement('select', {
+        style: { width: '100%', border: '1px solid #E2E8F0', borderRadius: 8, padding: '6px 10px', fontSize: 13 },
+        value: filters.linkedType,
+        onChange: e => setFilters(f => ({ ...f, linkedType: e.target.value })),
+      },
+        React.createElement('option', { value: '' }, 'הכל'),
+        React.createElement('option', { value: 'loan' }, 'הלוואה'),
+        React.createElement('option', { value: 'recurring' }, "הו\"ק / תשלומים"),
+        React.createElement('option', { value: 'insurance' }, 'ביטוח'),
+      ),
+    ),
+
+    // כפתור איפוס
+    React.createElement('button', {
+      style: { width: '100%', backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 8, padding: '8px', fontSize: 13, cursor: 'pointer', color: '#475569' },
+      onClick: () => setFilters({ type: '', categoryId: '', accountId: '', amountMin: '', amountMax: '', dateFrom: '', dateTo: '', txId: '', tags: '', linkedType: '' }),
+    }, 'איפוס סינון'),
+  ),
+
+  // ─── תוכן ראשי ───
+  React.createElement('div', { style: { flex: 1, minWidth: 0 } },
     React.createElement('div', { style: styles.header },
       React.createElement('h1', { style: styles.title }, 'תנועות'),
       React.createElement('div', { style: styles.headerActions },
@@ -350,6 +542,10 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
           months.map(m => React.createElement('option', { key: m.val, value: m.val }, m.label))
         ),
         React.createElement('button', { style: styles.btnPrimary, onClick: () => setShowModal(true) }, '+ תנועה חדשה'),
+        React.createElement('button', {
+          style: { ...styles.btnPrimary, backgroundColor: filterPanel ? '#1D4ED8' : '#64748B' },
+          onClick: () => setFilterPanel(p => !p)
+        }, '🔍 סינון'),
       )
     ),
 
@@ -360,9 +556,22 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       SummaryCard('יתרה', fmt(income - expense), income - expense >= 0 ? '#2563EB' : '#E11D48'),
     ),
 
+    React.createElement('div', { style: { padding: '0 24px 12px', display: 'flex', gap: 8, alignItems: 'center' } },
+      React.createElement('input', {
+        style: { flex: 1, border: '1px solid #E2E8F0', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none' },
+        placeholder: '🔍 חיפוש לפי תיאור או בית עסק...',
+        value: searchText,
+        onChange: e => setSearchText(e.target.value),
+      }),
+      searchText && React.createElement('button', {
+        style: { background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16 },
+        onClick: () => setSearchText(''),
+      }, '✕'),
+    ),
+
     // טבלה
     React.createElement('div', { style: styles.tableWrap },
-      transactions.length === 0
+      visibleTransactions.length === 0
         ? React.createElement('div', { style: styles.empty },
             React.createElement('p', null, '💸'),
             React.createElement('p', null, 'אין תנועות לחודש זה'),
@@ -371,13 +580,53 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
             React.createElement('table', { style: styles.table },
             React.createElement('thead', { style: { position: 'sticky', top: 0 } },
               React.createElement('tr', null,
-                ['#', 'תאריך', 'בית עסק', 'קטגוריה', 'תת-קטגוריה', 'חשבון', 'סכום', 'תקציבי', ''].map(h =>
-                  React.createElement('th', { key: h, style: styles.th, position: 'sticky', top: 0, backgroundColor: '#F8FAFC', zIndex: 1 }, h)
+                [
+                  { label: '', key: null },
+                  { label: '#', key: 'id' },
+                  { label: 'תאריך', key: 'transaction_date' },
+                  { label: 'בית עסק', key: 'business_entity' },
+                  { label: 'קטגוריה', key: 'category_name' },
+                  { label: 'תת-קטגוריה', key: null },
+                  { label: 'חשבון', key: 'account_name' },
+                  { label: 'סכום', key: 'amount' },
+                  { label: 'תקציבי', key: null },
+                  { label: '', key: null },
+                ].map(({ label, key }, colIdx) =>
+                  colIdx === 0
+                    ? React.createElement('th', { key: 'cb', style: { ...styles.th, width: 32, backgroundColor: '#F8FAFC' } },
+                        React.createElement('input', {
+                          type: 'checkbox',
+                          checked: selectedIds.size > 0 && sortedTransactions.every(t => selectedIds.has(t.id)),
+                          onChange: e => {
+                            if (e.target.checked) setSelectedIds(new Set(sortedTransactions.map(t => t.id)))
+                            else setSelectedIds(new Set())
+                          }
+                        })
+                      )
+                    : React.createElement('th', {
+                        key: label,
+                    style: {
+                      ...styles.th,
+                      cursor: key ? 'pointer' : 'default',
+                      userSelect: 'none',
+                      backgroundColor: '#F8FAFC',
+                      zIndex: 1,
+                    },
+                    onClick: key ? () => setSortConfig(s => ({
+                      key,
+                      dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc'
+                    })) : undefined,
+                  },
+                    label,
+                    key && sortConfig.key === key
+                      ? (sortConfig.dir === 'asc' ? ' ↑' : ' ↓')
+                      : (key ? ' ↕' : '')
+                  )
                 )
               )
             ),
             React.createElement('tbody', null,
-              transactions.map(tx => {
+              sortedTransactions.map(tx => {
                 const isExpanded = expandedTx === tx.id
                 const isEditing = editingTx === tx.id
                 const isEditingFull = editingFull === tx.id
@@ -502,6 +751,18 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                     onClick: () => !tx.is_virtual && setExpandedTx(isExpanded ? null : tx.id),
                     onDoubleClick: () => !tx.is_virtual && startEdit(tx),
                   },
+                    React.createElement('td', { style: { ...styles.td, width: 32 }, onClick: e => e.stopPropagation() },
+                      React.createElement('input', {
+                        type: 'checkbox',
+                        checked: selectedIds.has(tx.id),
+                        onChange: e => {
+                          const next = new Set(selectedIds)
+                          if (e.target.checked) next.add(tx.id)
+                          else next.delete(tx.id)
+                          setSelectedIds(next)
+                        }
+                      })
+                    ),
                     React.createElement('td', { style: { ...styles.td, color: '#94A3B8', fontSize: 11, userSelect: 'all' } },
                       React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
                         tx.is_virtual ? '—' : `#${tx.id}`,
@@ -701,6 +962,80 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
         )
     ),
 
+    selectedIds.size > 0 && React.createElement('div', {
+      style: {
+        position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+        backgroundColor: '#0F172A', color: '#fff', borderRadius: 16,
+        padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 16,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)', zIndex: 100, whiteSpace: 'nowrap',
+      }
+    },
+      React.createElement('span', { style: { fontSize: 13, fontWeight: '500' } },
+        `${selectedIds.size} תנועות נבחרו`
+      ),
+      React.createElement('div', { style: { width: 1, height: 20, backgroundColor: '#334155' } }),
+
+      // שנה סוג
+      React.createElement('select', {
+        style: { backgroundColor: '#1E293B', color: '#fff', border: '1px solid #334155', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' },
+        value: '',
+        onChange: e => {
+          if (!e.target.value) return
+          const type = e.target.value
+          if (!confirm(`לשנות ${selectedIds.size} תנועות ל${type === 'Income' ? 'הכנסה' : 'הוצאה'}?`)) return
+          const stmt = db.prepare('UPDATE Transactions SET transaction_type=? WHERE id=?')
+          selectedIds.forEach(id => stmt.run(type, id))
+          setSelectedIds(new Set())
+          loadData()
+        }
+      },
+        React.createElement('option', { value: '' }, 'שנה סוג...'),
+        React.createElement('option', { value: 'Income' }, 'הכנסה'),
+        React.createElement('option', { value: 'Expense' }, 'הוצאה'),
+        React.createElement('option', { value: 'Savings' }, 'חיסכון'),
+        React.createElement('option', { value: 'Transfer' }, 'העברה'),
+      ),
+
+      // שנה קטגוריה
+      React.createElement('select', {
+        style: { backgroundColor: '#1E293B', color: '#fff', border: '1px solid #334155', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' },
+        value: '',
+        onChange: e => {
+          if (!e.target.value) return
+          const catId = e.target.value
+          const catName = categories.find(c => String(c.id) === catId)?.name || ''
+          if (!confirm(`לשנות קטגוריה של ${selectedIds.size} תנועות ל"${catName}"?`)) return
+          const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
+          selectedIds.forEach(id => stmt.run(catId, id))
+          setSelectedIds(new Set())
+          loadData()
+        }
+      },
+        React.createElement('option', { value: '' }, 'שנה קטגוריה...'),
+        categories.map(c => React.createElement('option', { key: c.id, value: String(c.id) }, `${c.icon || ''} ${c.name}`))
+      ),
+
+      React.createElement('div', { style: { width: 1, height: 20, backgroundColor: '#334155' } }),
+
+      // מחק
+      React.createElement('button', {
+        style: { backgroundColor: '#E11D48', color: '#fff', border: 'none', borderRadius: 8, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: '500' },
+        onClick: () => {
+          if (!confirm(`למחוק ${selectedIds.size} תנועות לצמיתות?`)) return
+          const stmt = db.prepare('DELETE FROM Transactions WHERE id=?')
+          selectedIds.forEach(id => stmt.run(id))
+          setSelectedIds(new Set())
+          loadData()
+        }
+      }, '🗑 מחק'),
+
+      // ביטול בחירה
+      React.createElement('button', {
+        style: { background: 'none', border: 'none', color: '#94A3B8', fontSize: 18, cursor: 'pointer', lineHeight: 1 },
+        onClick: () => setSelectedIds(new Set()),
+      }, '✕'),
+    ),
+
     showModal && React.createElement(AddTransactionModal, {
       categories,
       accounts,
@@ -731,6 +1066,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       onSave: () => { setOffsetTx(null); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),
   )
+)
 }
 
 function SummaryCard(label, value, color) {

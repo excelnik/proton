@@ -155,6 +155,8 @@ function Import({ onNavigate }) {
   const [reviewRows, setReviewRows] = useState([])
   const [fileName, setFileName] = useState('')
   const [step3Result, setStep3Result] = useState(null)
+  const [activeTab, setActiveTab] = useState('new')
+  const [importHistory, setImportHistory] = useState([])
 
   useEffect(() => {
     setAccounts(db.prepare('SELECT * FROM Accounts WHERE is_active=1').all())
@@ -166,6 +168,30 @@ function Import({ onNavigate }) {
     const saved = loadSavedMapping(selectedAccount)
     if (saved) setMapping(m => ({ ...m, ...saved }))
   }, [selectedAccount])
+
+  function loadImportHistory() {
+      try {
+        const rows = db.prepare(`
+          SELECT import_id,
+                COUNT(*) as count,
+                MIN(transaction_date) as date_from,
+                MAX(transaction_date) as date_to,
+                MIN(created_at) as imported_at,
+                GROUP_CONCAT(DISTINCT account_name) as accounts
+          FROM (
+            SELECT t.import_id, t.transaction_date, t.created_at, a.name as account_name
+            FROM Transactions t
+            LEFT JOIN Accounts a ON t.account_id = a.id
+            WHERE t.import_id IS NOT NULL
+          )
+          GROUP BY import_id
+          ORDER BY imported_at DESC
+        `).all()
+        setImportHistory(rows)
+      } catch { setImportHistory([]) }
+    }
+
+    useEffect(() => { loadImportHistory() }, [])
 
   function processRows(rows, forceHasHeaders) {
     const useHeaders = forceHasHeaders !== undefined ? forceHasHeaders : hasHeaders
@@ -304,11 +330,13 @@ function Import({ onNavigate }) {
   function handleImport(includeAll) {
     const toImport = reviewRows.filter(r => includeAll || !r.isDuplicate)
 
+    const importId = `import_${Date.now()}`
+
     const insertTx = db.prepare(`
       INSERT INTO Transactions
         (transaction_date, value_date, amount, transaction_type, business_entity,
-         description, category_id, account_id, is_budgetary, is_maaser_obligated, source)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'import')
+         description, category_id, account_id, is_budgetary, is_maaser_obligated, source, import_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'import', ?)
     `)
 
     const importAll = db.transaction(() => {
@@ -317,7 +345,8 @@ function Import({ onNavigate }) {
         insertTx.run(
           row.rawDate, row.valueDate || row.rawDate,
           row.amount, row.txType, row.rawBusiness,
-          row.details || null, row.categoryId, row.accountId
+          row.details || null, row.categoryId, row.accountId,
+          importId
         )
             // שמור חוק אוטומטי
             if (row.rawBusiness && row.categoryId) {
@@ -340,7 +369,7 @@ function Import({ onNavigate }) {
     importAll()
     const imported = toImport.filter(r => r.accountId).length
     const skipped = reviewRows.length - imported
-    setStep3Result({ imported, skipped })
+    setStep3Result({ imported, skipped, importId })
     setStep(3)
   }
 
@@ -361,6 +390,61 @@ function Import({ onNavigate }) {
 
   return React.createElement('div', { style: styles.page },
     React.createElement('h1', { style: styles.title }, 'ייבוא תנועות מהבנק'),
+
+    // טאבים
+    React.createElement('div', { style: { display: 'flex', gap: 0, marginBottom: 20, borderBottom: '2px solid #E2E8F0' } },
+      React.createElement('button', {
+        style: { padding: '8px 20px', fontSize: 13, fontWeight: '500', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'new' ? '2px solid #2563EB' : '2px solid transparent', color: activeTab === 'new' ? '#2563EB' : '#64748B', backgroundColor: 'transparent', marginBottom: -2 },
+        onClick: () => setActiveTab('new'),
+      }, '+ ייבוא חדש'),
+      React.createElement('button', {
+        style: { padding: '8px 20px', fontSize: 13, fontWeight: '500', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'history' ? '2px solid #2563EB' : '2px solid transparent', color: activeTab === 'history' ? '#2563EB' : '#64748B', backgroundColor: 'transparent', marginBottom: -2 },
+        onClick: () => { setActiveTab('history'); loadImportHistory() },
+      }, '📋 ייבואים קודמים'),
+    ),
+
+    // היסטוריית ייבואים
+    activeTab === 'history' && React.createElement('div', { style: { backgroundColor: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', overflow: 'hidden' } },
+      importHistory.length === 0
+        ? React.createElement('div', { style: { padding: 40, textAlign: 'center', color: '#94A3B8' } },
+            React.createElement('p', { style: { fontSize: 32, marginBottom: 8 } }, '📭'),
+            React.createElement('p', null, 'אין ייבואים קודמים'),
+          )
+        : React.createElement('table', { style: { ...styles.table, width: '100%' } },
+            React.createElement('thead', null,
+              React.createElement('tr', null,
+                ['תאריך ייבוא', 'תנועות', 'חשבון', 'טווח תאריכים', 'פעולה'].map(h =>
+                  React.createElement('th', { key: h, style: styles.th }, h)
+                )
+              )
+            ),
+            React.createElement('tbody', null,
+              importHistory.map(imp =>
+                React.createElement('tr', { key: imp.import_id, style: { borderBottom: '1px solid #F1F5F9' } },
+                  React.createElement('td', { style: styles.td },
+                    new Date(imp.imported_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  ),
+                  React.createElement('td', { style: styles.td }, `${imp.count} תנועות`),
+                  React.createElement('td', { style: styles.td }, imp.accounts || '—'),
+                  React.createElement('td', { style: styles.td }, `${imp.date_from} — ${imp.date_to}`),
+                  React.createElement('td', { style: styles.td },
+                    React.createElement('button', {
+                      style: { backgroundColor: '#FEF2F2', color: '#E11D48', border: '1px solid #FCA5A5', borderRadius: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer' },
+                      onClick: () => {
+                        if (!confirm(`למחוק ${imp.count} תנועות מייבוא זה?`)) return
+                        db.prepare('DELETE FROM Transactions WHERE import_id=?').run(imp.import_id)
+                        loadImportHistory()
+                      },
+                    }, '↩ בטל ייבוא'),
+                  ),
+                )
+              )
+            )
+          )
+    ),
+
+    // תוכן ייבוא חדש
+    activeTab === 'new' && React.createElement('div', null,
 
     // Stepper
     React.createElement('div', { style: styles.stepper },
@@ -601,7 +685,7 @@ function Import({ onNavigate }) {
                   alert('⚠️ לא נבחר חשבון — לא ניתן לייבא')
                   return
                 }
-                handleImport(false)
+                handleImport(true)
               },
             }, `ייבא הכל (${reviewRows.length})`),
           )
@@ -689,6 +773,7 @@ function Import({ onNavigate }) {
       )
     ),
   )
+)
 }
 
 function ColSelect(label, value, onChange, headers, required) {

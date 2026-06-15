@@ -20,6 +20,10 @@ db.pragma('foreign_keys = ON')
 try {
   db.exec('ALTER TABLE Transactions ADD COLUMN value_date TEXT')
 } catch {}
+// הוספת import_id אם אינו קיים
+try {
+  db.exec('ALTER TABLE Transactions ADD COLUMN import_id TEXT')
+} catch {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS Accounts (
