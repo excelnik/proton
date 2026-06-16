@@ -304,7 +304,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
 
       // חיסכון
       React.createElement('div', { style: styles.card },
-        React.createElement('p', { style: { ...styles.cardTitle, marginBottom: 12 } }, '🎯 חיסכון'),
+        React.createElement('p', { style: { ...styles.cardTitle, marginBottom: 12 } }, '💰 חיסכון'),
         React.createElement('div', { style: { textAlign: 'center', padding: '12px 0' } },
           React.createElement('p', { style: { fontSize: 28, fontWeight: 'bold', color: '#10B981', marginBottom: 4 } }, fmt(data.savingsMonth)),
           React.createElement('p', { style: { fontSize: 12, color: '#94A3B8' } }, 'הופרש לחיסכון החודש'),
