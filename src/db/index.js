@@ -25,6 +25,43 @@ try {
   db.exec('ALTER TABLE Transactions ADD COLUMN import_id TEXT')
 } catch {}
 
+// ── מיגרציה: עמודות API לטבלת Assets ────────────────────────────────────
+try { db.exec('ALTER TABLE Assets ADD COLUMN exchange TEXT') } catch {}
+try { db.exec('ALTER TABLE Assets ADD COLUMN last_api_price REAL') } catch {}
+try { db.exec("ALTER TABLE Assets ADD COLUMN price_currency TEXT DEFAULT 'ILS'") } catch {}
+try { db.exec('ALTER TABLE Assets ADD COLUMN price_override REAL') } catch {}
+try { db.exec('ALTER TABLE Assets ADD COLUMN price_updated_at TEXT') } catch {}
+try { db.exec('ALTER TABLE Assets ADD COLUMN purchase_price REAL') } catch {}
+try { db.exec('ALTER TABLE Assets ADD COLUMN purchase_date TEXT') } catch {}
+
+// ── מיגרציה: cache מחירים ────────────────────────────────────────────────
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS Price_Cache (
+      ticker      TEXT PRIMARY KEY,
+      price       REAL NOT NULL,
+      currency    TEXT DEFAULT 'USD',
+      change_pct  REAL,
+      fetched_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `)
+} catch {}
+
+// ── מיגרציה: snapshots שווי נקי (לגרף מגמה) ─────────────────────────────
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS Net_Worth_Snapshots (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_date     TEXT NOT NULL DEFAULT (date('now')),
+      total_assets      REAL NOT NULL,
+      total_liabilities REAL NOT NULL,
+      net_worth         REAL NOT NULL,
+      notes             TEXT,
+      created_at        TEXT DEFAULT (datetime('now'))
+    )
+  `)
+} catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS Accounts (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,

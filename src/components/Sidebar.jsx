@@ -29,7 +29,7 @@ function Sidebar({ currentPage, onNavigate }) {
       React.createElement('div', { style: styles.logoIcon }, 'P'),
       React.createElement('div', null,
         React.createElement('p', { style: styles.logoTitle }, 'פרוטון'),
-        React.createElement('p', { style: styles.logoSub }, 'v0.2.4 בטא'),
+        React.createElement('p', { style: styles.logoSub }, 'v0.3.0 בטא'),
       )
     ),
     React.createElement('nav', { style: styles.nav },

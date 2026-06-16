@@ -342,83 +342,83 @@ function Settings() {
       ),
     ),
 
-    // ── גיבוי ושחזור ──
-    React.createElement('div', { style: styles.section },
-      React.createElement('h2', { style: styles.sectionTitle }, 'גיבוי ושחזור'),
-      React.createElement('div', { style: { display: 'flex', gap: 10 } },
-        React.createElement('button', {
-          style: { ...styles.btnPrimary, backgroundColor: '#10B981' },
-          onClick: handleExport,
-        }, '📦 ייצא גיבוי'),
-        React.createElement('button', {
-          style: styles.btnSecondary,
-          onClick: handleImport,
-        }, '📂 ייבא גיבוי'),
-      ),
-      React.createElement('p', { style: { fontSize: 11, color: '#94A3B8', marginTop: 8 } },
-        'הגיבוי נשמר כקובץ .db על שולחן העבודה'
-      ),
-    ),
+    // ── ניהול נתונים — גריד אופקי ──
+    React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 } },
 
-    // ── איפוס מערכת ──
-    React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
-      React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס מערכת'),
-      React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-        'מחיקת כל התנועות, החשבונות וכל הנתונים. פעולה בלתי הפיכה!'
+      // גיבוי ושחזור
+      React.createElement('div', { style: styles.section },
+        React.createElement('h2', { style: styles.sectionTitle }, 'גיבוי ושחזור'),
+        React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+          React.createElement('button', {
+            style: { ...styles.btnPrimary, backgroundColor: '#10B981', width: '100%' },
+            onClick: handleExport,
+          }, '📦 ייצא גיבוי'),
+          React.createElement('button', {
+            style: { ...styles.btnSecondary, width: '100%' },
+            onClick: handleImport,
+          }, '📂 ייבא גיבוי'),
+        ),
+        React.createElement('p', { style: { fontSize: 11, color: '#94A3B8', marginTop: 8 } },
+          'הגיבוי נשמר כקובץ .db'
+        ),
       ),
 
-      !showResetConfirm
-        ? React.createElement('button', {
-            style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
-            onClick: () => setShowResetConfirm(true),
-          }, 'איפוס מערכת')
-        : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 16 } },
-            React.createElement('p', { style: { fontSize: 14, fontWeight: '600', color: '#E11D48', marginBottom: 12 } },
-              resetStep === 1
-                ? '⚠️ האם אתה בטוח? כל הנתונים יימחקו לצמיתות!'
-                : '🚨 אישור אחרון — פעולה זו לא ניתנת לביטול!'
+      // איפוס מערכת
+      React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס מערכת'),
+        React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
+          'מחיקת כל התנועות והנתונים. פעולה בלתי הפיכה!'
+        ),
+        !showResetConfirm
+          ? React.createElement('button', {
+              style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
+              onClick: () => setShowResetConfirm(true),
+            }, 'איפוס מערכת')
+          : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
+              React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#E11D48', marginBottom: 10 } },
+                resetStep === 1 ? '⚠️ האם אתה בטוח?' : '🚨 אישור אחרון!'
+              ),
+              React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                React.createElement('button', {
+                  style: { ...styles.btnSecondary, flex: 1, padding: '7px 8px', fontSize: 12 },
+                  onClick: () => { setShowResetConfirm(false); setResetStep(0) },
+                }, 'ביטול'),
+                React.createElement('button', {
+                  style: { ...styles.btnPrimary, backgroundColor: '#E11D48', flex: 1, padding: '7px 8px', fontSize: 12 },
+                  onClick: handleReset,
+                }, resetStep === 1 ? 'בטוח' : 'מחק הכל'),
+              ),
             ),
-            React.createElement('div', { style: { display: 'flex', gap: 8 } },
-              React.createElement('button', {
-                style: styles.btnSecondary,
-                onClick: () => { setShowResetConfirm(false); setResetStep(0) },
-              }, 'ביטול'),
-              React.createElement('button', {
-                style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
-                onClick: handleReset,
-              }, resetStep === 1 ? 'כן, אני בטוח' : 'מחק הכל לצמיתות'),
-            ),
-          ),
-    ),
-
-    // ── הסרת פרוטון (בטוחה) ──
-    React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5', marginTop: 16 } },
-      React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
-      React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-        'מחיקה בטוחה של הנתונים, עם אפשרות לגיבוי.'
       ),
 
-      deleteStep === 0
-        ? React.createElement('button', {
-            style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
-            onClick: handleDeleteData,
-          }, '🗑 הסר את פרוטון')
-        : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 16 } },
-            React.createElement('p', { style: { fontSize: 13, color: '#E11D48', marginBottom: 12, fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' } }, deleteMessage),
-            deleteStep === 1 && React.createElement('div', { style: { display: 'flex', gap: 8 } },
-              React.createElement('button', {
-                style: styles.btnSecondary,
-                onClick: () => { setDeleteStep(0); setDeleteMessage('') },
-              }, 'ביטול'),
-              React.createElement('button', {
-                style: { ...styles.btnPrimary, backgroundColor: '#E11D48' },
-                onClick: handleDeleteData,
-              }, 'אישור'),
+      // הסרת פרוטון
+      React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
+        React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
+          'מחיקה בטוחה של הנתונים עם אפשרות לגיבוי.'
+        ),
+        deleteStep === 0
+          ? React.createElement('button', {
+              style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
+              onClick: handleDeleteData,
+            }, '🗑 הסר את פרוטון')
+          : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
+              React.createElement('p', { style: { fontSize: 13, color: '#E11D48', marginBottom: 10, fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' } }, deleteMessage),
+              deleteStep === 1 && React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                React.createElement('button', {
+                  style: { ...styles.btnSecondary, flex: 1, padding: '7px 8px', fontSize: 12 },
+                  onClick: () => { setDeleteStep(0); setDeleteMessage('') },
+                }, 'ביטול'),
+                React.createElement('button', {
+                  style: { ...styles.btnPrimary, backgroundColor: '#E11D48', flex: 1, padding: '7px 8px', fontSize: 12 },
+                  onClick: handleDeleteData,
+                }, 'אישור'),
+              ),
+              deleteStep === 2 && React.createElement('div', { style: { textAlign: 'center' } },
+                React.createElement('p', { style: { fontSize: 12, color: '#94A3B8', marginTop: 8 } }, 'מחכה...')
+              ),
             ),
-            deleteStep === 2 && React.createElement('div', { style: { textAlign: 'center' } },
-              React.createElement('p', { style: { fontSize: 12, color: '#94A3B8', marginTop: 8 } }, 'מחכה...')
-            ),
-          ),
+      ),
     ),
 
     React.createElement(About),
@@ -505,27 +505,39 @@ function About() {
     require('electron').shell.openExternal(url)
   }
 
-  return React.createElement('div', { style: { ...styles.section, textAlign: 'center' } },
-    // לוגו וכותרת
-    React.createElement('div', { style: { marginBottom: 16 } },
-    React.createElement('svg', { 
-      width: 64, height: 64, viewBox: '0 0 512 512', 
-      xmlns: 'http://www.w3.org/2000/svg',
-      style: { marginBottom: 8 }
-    },
-      React.createElement('rect', { x: 0, y: 0, width: 512, height: 512, rx: 114, fill: '#1E3A8A' }),
-      React.createElement('line', { x1: 186, y1: 126, x2: 186, y2: 386, stroke: '#93C5FD', strokeWidth: 28, strokeLinecap: 'round' }),
-      React.createElement('path', { d: 'M186 126 Q346 126 346 226 Q346 326 186 326', fill: 'none', stroke: '#93C5FD', strokeWidth: 28, strokeLinecap: 'round', strokeLinejoin: 'round' }),
-      React.createElement('circle', { cx: 266, cy: 226, r: 48, fill: '#F59E0B', opacity: 0.9 }),
-      React.createElement('text', { x: 266, y: 242, textAnchor: 'middle', fontSize: 36, fontWeight: 700, fill: '#1E3A8A', fontFamily: 'serif' }, '₪'),
-    ),
-      React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A' } }, 'פרוטון'),
-      React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 4 } }, 'v0.2.4 Beta'),
-      React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
+    return React.createElement('div', { style: styles.section },
+
+    // שורה עליונה: אייקון+כותרת בימין, כפתור עזרה בשמאל
+    React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 } },
+      // ימין: אייקון + טקסט
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } },
+        React.createElement('svg', {
+          width: 56, height: 56, viewBox: '0 0 512 512',
+          xmlns: 'http://www.w3.org/2000/svg',
+        },
+          React.createElement('rect', { x: 0, y: 0, width: 512, height: 512, rx: 114, fill: '#1E3A8A' }),
+          React.createElement('line', { x1: 186, y1: 126, x2: 186, y2: 386, stroke: '#93C5FD', strokeWidth: 28, strokeLinecap: 'round' }),
+          React.createElement('path', { d: 'M186 126 Q346 126 346 226 Q346 326 186 326', fill: 'none', stroke: '#93C5FD', strokeWidth: 28, strokeLinecap: 'round', strokeLinejoin: 'round' }),
+          React.createElement('circle', { cx: 266, cy: 226, r: 48, fill: '#F59E0B', opacity: 0.9 }),
+          React.createElement('text', { x: 266, y: 242, textAnchor: 'middle', fontSize: 36, fontWeight: 700, fill: '#1E3A8A', fontFamily: 'serif' }, '₪'),
+        ),
+        React.createElement('div', null,
+          React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 } }, 'פרוטון'),
+          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, 'v0.3.0 Beta'),
+          React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
+        ),
+      ),
+      // שמאל: כפתור עזרה
+      React.createElement('button', {
+        style: { ...styles.btnSecondary, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 },
+        onClick: () => openLink('https://excelnik.github.io/proton/quickstart.html'),
+      }, '❓ עזרה ומדריך'),
     ),
 
     // קו מפריד
-    React.createElement('div', { style: { height: 1, backgroundColor: '#E2E8F0', margin: '16px 0' } }),
+    React.createElement('div', { style: { height: 1, backgroundColor: '#E2E8F0', margin: '0 0 16px 0' } }),
+
+    React.createElement('div', { style: { textAlign: 'center' } },
 
     // קישורי שותפים
     React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 12 } }, 'פתח תיק השקעות'),
@@ -551,7 +563,7 @@ function About() {
     React.createElement('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 16 } },
       React.createElement('button', {
         style: { ...styles.btnPrimary, backgroundColor: '#FBBF24', color: '#0F172A' },
-        onClick: () => openLink('LINK_COFFEE'),
+        onClick: () => openLink('https://ko-fi.com/excelnik'),
       }, '☕ פרגנו לי בקפה'),
       React.createElement('button', {
         style: { ...styles.btnSecondary, display: 'flex', alignItems: 'center', overflow: 'visible' },
@@ -572,12 +584,19 @@ function About() {
         ),
       ),
     ),
-    React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 12 } }, 'בכל נושא ניתן לפנות אלי במייל Excelnik@gmail.com'),
+    React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 12 } },
+      'בכל נושא ניתן לפנות אלי במייל ',
+      React.createElement('span', {
+        style: { color: '#2563EB', cursor: 'pointer', textDecoration: 'underline' },
+        onClick: () => openLink('mailto:Excelnik@gmail.com'),
+      }, 'Excelnik@gmail.com'),
+    ),
 
     // רישיון וקרדיט
     React.createElement('div', { style: { height: 1, backgroundColor: '#E2E8F0', margin: '16px 0' } }),
     React.createElement('p', { style: { fontSize: 11, color: '#94A3B8' } }, '© 2026 Pruton — GPL v3 License'),
   )
+)
 }
 
 module.exports = Settings
