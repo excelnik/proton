@@ -204,10 +204,20 @@ function Recurring() {
                 `${t.type === 'recurring' ? 'הוראת קבע' : 'תשלומים'} | ${fmt(t.amount)}`
               ),
             ),
-            React.createElement('button', {
-              style: { ...styles.actionBtn, fontSize: 11, color: '#E11D48' },
-              onClick: () => { setDeleteTemplate(t); setDeleteMode('keep') },
-            }, '🗑'),
+            React.createElement('div', { style: { display: 'flex', gap: 4 } },
+              React.createElement('button', {
+                style: { ...styles.actionBtn, fontSize: 11 },
+                onClick: () => { setEditTemplate(t); setModalType(t.type); setShowModal(true) },
+              }, '✏️'),
+              React.createElement('button', {
+                style: { ...styles.actionBtn, fontSize: 11 },
+                onClick: () => setLinkTemplate(t),
+              }, '🔗'),
+              React.createElement('button', {
+                style: { ...styles.actionBtn, fontSize: 11, color: '#E11D48' },
+                onClick: () => { setDeleteTemplate(t); setDeleteMode('keep') },
+              }, '🗑'),
+            ),
           )
         )
       ),

@@ -389,18 +389,18 @@ function Import({ onNavigate }) {
   })
 
   return React.createElement('div', { style: styles.page },
-    React.createElement('h1', { style: styles.title }, 'ייבוא תנועות מהבנק'),
+    React.createElement('h1', { style: styles.title }, 'יבוא תנועות מהבנק'),
 
     // טאבים
     React.createElement('div', { style: { display: 'flex', gap: 0, marginBottom: 20, borderBottom: '2px solid #E2E8F0' } },
       React.createElement('button', {
         style: { padding: '8px 20px', fontSize: 13, fontWeight: '500', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'new' ? '2px solid #2563EB' : '2px solid transparent', color: activeTab === 'new' ? '#2563EB' : '#64748B', backgroundColor: 'transparent', marginBottom: -2 },
         onClick: () => setActiveTab('new'),
-      }, '+ ייבוא חדש'),
+      }, '+ יבוא חדש'),
       React.createElement('button', {
         style: { padding: '8px 20px', fontSize: 13, fontWeight: '500', border: 'none', cursor: 'pointer', borderBottom: activeTab === 'history' ? '2px solid #2563EB' : '2px solid transparent', color: activeTab === 'history' ? '#2563EB' : '#64748B', backgroundColor: 'transparent', marginBottom: -2 },
         onClick: () => { setActiveTab('history'); loadImportHistory() },
-      }, '📋 ייבואים קודמים'),
+      }, '📋 היסטוריית יבוא'),
     ),
 
     // היסטוריית ייבואים
@@ -408,12 +408,12 @@ function Import({ onNavigate }) {
       importHistory.length === 0
         ? React.createElement('div', { style: { padding: 40, textAlign: 'center', color: '#94A3B8' } },
             React.createElement('p', { style: { fontSize: 32, marginBottom: 8 } }, '📭'),
-            React.createElement('p', null, 'אין ייבואים קודמים'),
+            React.createElement('p', null, 'אין תהליכים קודמים'),
           )
         : React.createElement('table', { style: { ...styles.table, width: '100%' } },
             React.createElement('thead', null,
               React.createElement('tr', null,
-                ['תאריך ייבוא', 'תנועות', 'חשבון', 'טווח תאריכים', 'פעולה'].map(h =>
+                ['תאריך יבוא', 'תנועות', 'חשבון', 'טווח תאריכים', 'פעולה'].map(h =>
                   React.createElement('th', { key: h, style: styles.th }, h)
                 )
               )
@@ -431,11 +431,11 @@ function Import({ onNavigate }) {
                     React.createElement('button', {
                       style: { backgroundColor: '#FEF2F2', color: '#E11D48', border: '1px solid #FCA5A5', borderRadius: 8, padding: '4px 12px', fontSize: 12, cursor: 'pointer' },
                       onClick: () => {
-                        if (!confirm(`למחוק ${imp.count} תנועות מייבוא זה?`)) return
+                        if (!confirm(`למחוק ${imp.count} תנועות מיבוא זה?`)) return
                         db.prepare('DELETE FROM Transactions WHERE import_id=?').run(imp.import_id)
                         loadImportHistory()
                       },
-                    }, '↩ בטל ייבוא'),
+                    }, '↩ בטל יבוא'),
                   ),
                 )
               )
@@ -474,7 +474,7 @@ function Import({ onNavigate }) {
           value: selectedAccount,
           onChange: e => setSelectedAccount(e.target.value),
         },
-          React.createElement('option', { value: '' }, '— ייבוא מרובה חשבונות —'),
+          React.createElement('option', { value: '' }, '— יבוא מרובה חשבונות —'),
           accounts.map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
         )
       ),
@@ -672,22 +672,22 @@ function Import({ onNavigate }) {
               style: { ...styles.btnPrimary, backgroundColor: '#10B981' },
               onClick: () => {
                 if (reviewRows.every(r => !r.accountId)) {
-                  alert('⚠️ לא נבחר חשבון — לא ניתן לייבא')
+                  alert('⚠️ לא נבחר חשבון — לא ניתן ליבא')
                   return
                 }
                 handleImport(false)
               },
-            }, `ייבא ${newCount} ללא כפולות`),
+            }, `יבא ${newCount} ללא כפולות`),
             React.createElement('button', {
               style: styles.btnPrimary,
               onClick: () => {
                 if (reviewRows.every(r => !r.accountId)) {
-                  alert('⚠️ לא נבחר חשבון — לא ניתן לייבא')
+                  alert('⚠️ לא נבחר חשבון — לא ניתן ליבא')
                   return
                 }
                 handleImport(true)
               },
-            }, `ייבא הכל (${reviewRows.length})`),
+            }, `יבא הכל (${reviewRows.length})`),
           )
         ),
         fallbackCount > 0 && React.createElement('p', { style: { fontSize: 12, color: '#F59E0B', margin: 0 } },
@@ -758,14 +758,14 @@ function Import({ onNavigate }) {
     // ── שלב 4 ──
     step === 3 && step3Result && React.createElement('div', { style: { ...styles.card, textAlign: 'center', padding: 40 } },
       React.createElement('p', { style: { fontSize: 48, marginBottom: 12 } }, '✅'),
-      React.createElement('h2', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 } }, 'הייבוא הושלם!'),
+      React.createElement('h2', { style: { fontSize: 18, fontWeight: 'bold', marginBottom: 16 } }, 'היבוא הושלם!'),
       React.createElement('p', { style: { color: '#10B981', marginBottom: 4, fontSize: 14 } }, `✓ ${step3Result.imported} תנועות נוספו`),
       step3Result.skipped > 0 && React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, `⏭ ${step3Result.skipped} דולגו`),
       React.createElement('div', { style: { display: 'flex', gap: 8, justifyContent: 'center', marginTop: 20 } },
         React.createElement('button', {
           style: styles.btnSecondary,
           onClick: () => { setStep(0); setFileName(''); setPasteText(''); setReviewRows([]) },
-        }, 'ייבא קובץ נוסף'),
+        }, 'יבא קובץ נוסף'),
         React.createElement('button', {
           style: styles.btnPrimary,
           onClick: () => onNavigate && onNavigate('transactions'),

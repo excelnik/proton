@@ -368,7 +368,6 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
 
       // מוטו
       React.createElement('div', { style: { ...styles.card, backgroundColor: '#0F172A', display: 'flex', flexDirection: 'column', justifyContent: 'center' } },
-        React.createElement('p', { style: { fontSize: 13, color: '#94A3B8', marginBottom: 12, textAlign: 'center' } }, 'סידור יעב"ץ'),
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
           'ועיין בהוצאה לעומת הכנסה'
         ),
@@ -381,6 +380,8 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
         React.createElement('p', { style: { fontSize: 14, color: '#F8FAFC', lineHeight: 2, textAlign: 'center', fontWeight: '500' } },
           'ולשלחנם לא תחמוד'
         ),
+        React.createElement('p', { style: { fontSize: 13, color: '#94A3B8', marginBottom: 12, textAlign: 'center' } },
+          'סידור יעב"ץ'),
       ),
 
       // מעשרות

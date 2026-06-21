@@ -262,30 +262,28 @@ function PolicyModal({ editPolicy, renewPolicy, onClose, onSave }) {
   function handleSave() {
     if (!form.name || !form.premium_amount) { setError('נא למלא שם ופרמיה'); return }
 
+    const recurringId = form.recurring_id ? parseInt(form.recurring_id) : null
+
     if (isRenew) {
       // סגור פוליסה ישנה
       db.prepare('UPDATE Insurance_Policies SET is_active=0 WHERE id=?').run(renewPolicy.id)
       // צור פוליסה חדשה
-      const recurringId = form.recurring_id ? parseInt(form.recurring_id) : null
-
-      if (isRenew) {
-        db.prepare(`
-          INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, 1)
-        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
-      } else if (editPolicy) {
-        db.prepare(`
-          UPDATE Insurance_Policies SET name=?, provider_name=?, premium_amount=?, payment_type=?, renewal_date=?, recurring_id=?
-          WHERE id=?
-        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId, editPolicy.id)
-      } else {
-        db.prepare(`
-          INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, 1)
-        `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
-      }
-      onSave()
+      db.prepare(`
+        INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
+    } else if (editPolicy) {
+      db.prepare(`
+        UPDATE Insurance_Policies SET name=?, provider_name=?, premium_amount=?, payment_type=?, renewal_date=?, recurring_id=?
+        WHERE id=?
+      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId, editPolicy.id)
+    } else {
+      db.prepare(`
+        INSERT INTO Insurance_Policies (name, provider_name, premium_amount, payment_type, renewal_date, recurring_id, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+      `).run(form.name, form.provider_name, parseFloat(form.premium_amount), form.payment_type, form.renewal_date, recurringId)
     }
+    onSave()
   }
 
   return React.createElement('div', { style: styles.overlay },

@@ -264,7 +264,7 @@ function NetWorth() {
       React.createElement('h1', { style: S.title }, 'ניהול שווי נקי'),
       React.createElement('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
         loadingPrices && React.createElement('span', { style: S.badgeBlue }, '⟳ מעדכן מחירים...'),
-        priceStale && !loadingPrices && React.createElement('span', { style: S.badgeAmber }, '⚠ מחירים חלקיים'),
+        priceStale && !loadingPrices && React.createElement('span', { style: S.badgeAmber }, '⚠ אין חיבור לרשת, לא ניתן לעדכן נתונים'),
         React.createElement('button', { style: S.btnSecondary, onClick: refreshPrices, disabled: loadingPrices }, '↻ מחירים'),
         React.createElement('button', { style: S.btnSecondary, onClick: () => { setEditDebt(null); setShowDebtModal(true) } }, '+ חוב זמני'),
         React.createElement('button', { style: S.btnPrimary, onClick: () => { setEditAsset(null); setShowAssetModal(true) } }, '+ נכס'),

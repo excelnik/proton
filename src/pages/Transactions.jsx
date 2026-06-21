@@ -873,10 +873,10 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
                                 db.prepare('SELECT id, name FROM Liabilities WHERE is_active=1').all()
                                   .map(l => React.createElement('option', { key: l.id, value: l.id }, l.name))
                               )),
-                              EditField('הו"ק מקושר', React.createElement('select', { style: editInput, value: editForm.recurring_id, onChange: e => setEdit('recurring_id', e.target.value) },
+                              EditField('הו"ק / תשלומים מקושר', React.createElement('select', { style: editInput, value: editForm.recurring_id, onChange: e => setEdit('recurring_id', e.target.value) },
                                 React.createElement('option', { value: '' }, '— ללא —'),
-                                db.prepare('SELECT id, name FROM Recurring_Templates WHERE is_active=1').all()
-                                  .map(r => React.createElement('option', { key: r.id, value: r.id }, r.name))
+                                db.prepare("SELECT id, name, type, is_active FROM Recurring_Templates ORDER BY is_active DESC, type, name").all()
+                                  .map(r => React.createElement('option', { key: r.id, value: r.id }, `${r.name}${r.type === 'installment' ? ' (תשלומים)' : ''}${!r.is_active ? ' [בארכיון]' : ''}`))
                               )),
                               EditField('יעד חיסכון', React.createElement('select', { style: editInput, value: editForm.savings_goal_id, onChange: e => setEdit('savings_goal_id', e.target.value) },
                                 React.createElement('option', { value: '' }, '— ללא —'),
