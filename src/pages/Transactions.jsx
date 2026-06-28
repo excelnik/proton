@@ -112,9 +112,9 @@ function generateVirtualTransactions() {
 
         const covered = db.prepare(`
           SELECT id FROM Transactions
-          WHERE recurring_id=? AND substr(transaction_date,1,7)=?
+          WHERE recurring_id=? AND substr(COALESCE(value_date, transaction_date),1,7)=?
         `).get(t.id, monthStr)
-
+        
         if (!covered) {
           virtual.push({
             id: `virtual_installment_${t.id}_${i}`,
@@ -576,7 +576,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
             React.createElement('p', null, '💸'),
             React.createElement('p', null, 'אין תנועות לחודש זה'),
           )
-        : React.createElement('div', { style: { overflowY: 'auto', maxHeight: 'calc(100vh - 210px)' } },
+        : React.createElement('div', { style: { overflowY: 'auto', maxHeight: 'calc(100vh - 270px)' } },
             React.createElement('table', { style: styles.table },
             React.createElement('thead', { style: { position: 'sticky', top: 0 } },
               React.createElement('tr', null,

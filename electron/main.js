@@ -4,6 +4,7 @@ const os = require('os')
 const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
 const { initCrashLogger } = require('../crashLogger')
+const Database = require('better-sqlite3')
 initCrashLogger(path.join(os.homedir(), 'AppData', 'Roaming', 'proton'))
 
 const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
@@ -84,6 +85,12 @@ ipcMain.handle('export-db', async (event, srcPath) => {
       filters: [{ name: 'Database', extensions: ['db'] }]
     })
     if (!filePath) return { success: false, cancelled: true }
+
+    // לוודא שכל הנתונים מה-WAL נכתבו לקובץ הראשי לפני ההעתקה
+    const liveDb = new Database(srcPath)
+    liveDb.pragma('wal_checkpoint(TRUNCATE)')
+    liveDb.close()
+
     fs.copyFileSync(srcPath, filePath)
     return { success: true, path: filePath }
   } catch(e) {
@@ -114,9 +121,11 @@ ipcMain.handle('safe-delete-db', async (event, dbPath) => {
       return { success: false, error: 'קובץ נתונים לא נמצא' }
     }
 
-    // מחק את הקובץ
+    // מחק את הקובץ הראשי וגם את WAL/SHM הנלווים
     fs.rmSync(dbPath, { force: true })
-    
+    fs.rmSync(dbPath + '-wal', { force: true })
+    fs.rmSync(dbPath + '-shm', { force: true })
+
     // וודא שנמחק
     if (fs.existsSync(dbPath)) {
       return { success: false, error: 'לא הצלחנו למחוק את קובץ הנתונים' }

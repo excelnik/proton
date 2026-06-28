@@ -20,15 +20,32 @@ function Accounts() {
 
   function loadAccounts() {
     const accs = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
+    const today = new Date().toISOString().slice(0, 10)
+
     const result = accs.map(acc => {
+      if (acc.type === 'Credit_Card') {
+        // יתרת כרטיס אשראי = סכום קניות מאז תאריך החיוב האחרון
+        const lastBilling = db.getLastBillingDate(acc.billing_day)
+        const stats = db.prepare(`
+          SELECT COALESCE(SUM(amount), 0) as total
+          FROM Transactions
+          WHERE account_id=? AND transaction_type='Expense'
+            AND COALESCE(value_date, transaction_date) > ?
+        `).get(acc.id, lastBilling)
+        return { ...acc, balance: stats.total }
+      }
+
+      // עו"ש ומזומן - חישוב כרגיל, רק עם הגבלה לתאריך עד היום (לא לוקח תנועות עתידיות)
       const stats = db.prepare(`
         SELECT
           COALESCE(SUM(CASE WHEN transaction_type='Income'  THEN amount ELSE 0 END), 0) as inc,
           COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
-        FROM Transactions WHERE account_id=?
-      `).get(acc.id)
+        FROM Transactions
+        WHERE account_id=? AND COALESCE(value_date, transaction_date) <= ?
+      `).get(acc.id, today)
       return { ...acc, balance: acc.opening_balance + stats.inc - stats.exp }
     })
+
     setAccounts(result)
   }
 
@@ -111,16 +128,21 @@ function AccountModal({ editAccount, onClose, onSave }) {
   const [name, setName]                   = useState(editAccount?.name ?? '')
   const [type, setType]                   = useState(editAccount?.type ?? 'Bank')
   const [openingBalance, setOpeningBalance] = useState(editAccount?.opening_balance?.toString() ?? '')
+  const [billingDay, setBillingDay]       = useState(editAccount?.billing_day?.toString() ?? '')
+  const [settlementAccountId, setSettlementAccountId] = useState(editAccount?.settlement_account_id?.toString() ?? '')
   const [error, setError]                 = useState('')
 
   function handleSave() {
     if (!name.trim()) { setError('נא להזין שם לחשבון'); return }
+    const billingDayVal = type === 'Credit_Card' ? (parseInt(billingDay) || null) : null
+    const settlementVal = type === 'Credit_Card' ? (parseInt(settlementAccountId) || null) : null
+
     if (editAccount) {
-      db.prepare('UPDATE Accounts SET name=?, type=?, opening_balance=? WHERE id=?')
-        .run(name.trim(), type, parseFloat(openingBalance) || 0, editAccount.id)
+      db.prepare('UPDATE Accounts SET name=?, type=?, opening_balance=?, billing_day=?, settlement_account_id=? WHERE id=?')
+        .run(name.trim(), type, parseFloat(openingBalance) || 0, billingDayVal, settlementVal, editAccount.id)
     } else {
-      db.prepare('INSERT INTO Accounts (name, type, opening_balance) VALUES (?, ?, ?)')
-        .run(name.trim(), type, parseFloat(openingBalance) || 0)
+      db.prepare('INSERT INTO Accounts (name, type, opening_balance, billing_day, settlement_account_id) VALUES (?, ?, ?, ?, ?)')
+        .run(name.trim(), type, parseFloat(openingBalance) || 0, billingDayVal, settlementVal)
     }
     onSave()
   }
@@ -156,6 +178,24 @@ function AccountModal({ editAccount, onClose, onSave }) {
           value: openingBalance,
           onChange: e => setOpeningBalance(e.target.value),
         })),
+        type === 'Credit_Card' && Field('יום חיוב בחודש', React.createElement('input', {
+          style: styles.input,
+          type: 'number',
+          min: 1,
+          max: 31,
+          placeholder: '10',
+          value: billingDay,
+          onChange: e => setBillingDay(e.target.value),
+        })),
+        type === 'Credit_Card' && Field('חשבון בנק מחויב', React.createElement('select', {
+          style: styles.input,
+          value: settlementAccountId,
+          onChange: e => setSettlementAccountId(e.target.value),
+        },
+          React.createElement('option', { value: '' }, '— בחר —'),
+          db.prepare("SELECT id, name FROM Accounts WHERE type='Bank' AND is_active=1").all()
+            .map(a => React.createElement('option', { key: a.id, value: a.id }, a.name))
+        )),
         error && React.createElement('p', { style: { color: '#E11D48', fontSize: 12, marginTop: 4 } }, error),
       ),
       React.createElement('div', { style: styles.modalFooter },

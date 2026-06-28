@@ -24,6 +24,17 @@ try {
 try {
   db.exec('ALTER TABLE Transactions ADD COLUMN import_id TEXT')
 } catch {}
+// ── מיגרציה: כרטיסי אשראי - יום חיוב וחשבון מקושר ──────────────────────
+try { db.exec('ALTER TABLE Accounts ADD COLUMN billing_day INTEGER') } catch {}
+try { db.exec('ALTER TABLE Accounts ADD COLUMN settlement_account_id INTEGER REFERENCES Accounts(id)') } catch {}
+try { db.exec('ALTER TABLE Transactions ADD COLUMN settles_credit_card_id INTEGER REFERENCES Accounts(id)') } catch {}
+
+// ── מיגרציה: קישור תנועות הורה-ילד וקטגוריות נוספות ─────────────────────
+try { db.exec('ALTER TABLE Transactions ADD COLUMN parent_id INTEGER REFERENCES Transactions(id)') } catch {}
+try { db.exec('ALTER TABLE Transactions ADD COLUMN offset_group_id INTEGER') } catch {}
+try { db.exec('ALTER TABLE Transactions ADD COLUMN insurance_id INTEGER REFERENCES Insurance_Policies(id)') } catch {}
+try { db.exec('ALTER TABLE Transactions ADD COLUMN liability_id INTEGER REFERENCES Liabilities(id)') } catch {}
+try { db.exec('ALTER TABLE Transactions ADD COLUMN recurring_id INTEGER REFERENCES Recurring_Templates(id)') } catch {}
 
 // ── מיגרציה: עמודות API לטבלת Assets ────────────────────────────────────
 try { db.exec('ALTER TABLE Assets ADD COLUMN exchange TEXT') } catch {}
@@ -68,7 +79,9 @@ db.exec(`
     name               TEXT    NOT NULL,
     type               TEXT    NOT NULL CHECK(type IN ('Bank','Credit_Card','Cash')),
     opening_balance    REAL    NOT NULL DEFAULT 0,
-    is_active          INTEGER NOT NULL DEFAULT 1
+    is_active          INTEGER NOT NULL DEFAULT 1,
+    billing_day            INTEGER,
+    settlement_account_id  INTEGER REFERENCES Accounts(id)
   );
 
   CREATE TABLE IF NOT EXISTS Categories (
@@ -102,7 +115,8 @@ db.exec(`
     recurring_id        INTEGER REFERENCES Recurring_Templates(id),
     parent_id           INTEGER REFERENCES Transactions(id),
     offset_group_id     INTEGER,
-    insurance_id        INTEGER REFERENCES Insurance_Policies(id)
+    insurance_id        INTEGER REFERENCES Insurance_Policies(id),
+    settles_credit_card_id INTEGER REFERENCES Accounts(id)
   );
 
   CREATE TABLE IF NOT EXISTS Budget_Goals (
@@ -240,5 +254,19 @@ function getDateColumn() {
   } catch { return 'transaction_date' }
 }
 
+// מחשבת את תאריך החיוב האחרון שעבר, לפי billing_day נתון
+function getLastBillingDate(billingDay) {
+  const day = billingDay || 1
+  const today = new Date()
+  let last = new Date(today.getFullYear(), today.getMonth(), day)
+
+  if (today.getDate() < day) {
+    last = new Date(today.getFullYear(), today.getMonth() - 1, day)
+  }
+
+  return last.toISOString().slice(0, 10)
+}
+
 module.exports = db
 module.exports.getDateColumn = getDateColumn
+module.exports.getLastBillingDate = getLastBillingDate

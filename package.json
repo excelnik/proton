@@ -1,6 +1,6 @@
 {
   "name": "proton",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "פרוטון - מערכת ניהול פיננסי",
   "main": "electron/main.js",
   "author": "excelnik",

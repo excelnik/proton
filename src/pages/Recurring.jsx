@@ -97,7 +97,7 @@ function Recurring() {
       const monthlyDrop = installments.reduce((s, t) => s + t.amount, 0)
       return {
         s1: { label: 'יתרת חוב כוללת', value: '₪' + Math.round(totalDebt).toLocaleString('he-IL'), color: '#E11D48' },
-        s2: { label: 'ירידה חודשית', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
+        s2: { label: 'עלות חודשית', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
         s3: { label: 'עסקאות פעילות', value: installments.length.toString(), color: '#2563EB' },
       }
     }
