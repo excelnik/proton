@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 const os = require('os')
 const fs = require('fs')
@@ -13,6 +13,61 @@ process.env.PROTON_DB_PATH = DB_PATH
 let mainWindow
 let updateAvailable = false
 let updateDownloaded = false
+
+function createMenu() {
+  const template = [
+    {
+      label: 'קובץ',
+      submenu: [
+        { role: 'quit', label: 'יציאה' }
+      ]
+    },
+    {
+      label: 'עריכה',
+      submenu: [
+        { role: 'undo', label: 'בטל' },
+        { role: 'redo', label: 'בצע מחדש' },
+        { type: 'separator' },
+        { role: 'cut', label: 'גזור' },
+        { role: 'copy', label: 'העתק' },
+        { role: 'paste', label: 'הדבק' },
+        { role: 'selectAll', label: 'בחר הכל' },
+      ]
+    },
+    {
+      label: 'תצוגה',
+      submenu: [
+        { role: 'reload', label: 'רענן' },
+        { role: 'toggleDevTools', label: 'כלי מפתחים' },
+        { type: 'separator' },
+        { role: 'resetZoom', label: 'איפוס תקריב' },
+        { role: 'zoomIn', label: 'הגדל' },
+        { role: 'zoomOut', label: 'הקטן' },
+        { type: 'separator' },
+        { role: 'togglefullscreen', label: 'מסך מלא' },
+      ]
+    },
+    {
+      label: 'עזרה',
+      submenu: [
+        {
+          label: 'מדריך למשתמש',
+          click: () => {
+            const guideWindow = new BrowserWindow({
+              width: 1100,
+              height: 800,
+              title: 'מדריך למשתמש - פרוטון',
+            })
+            guideWindow.loadURL('https://excelnik.github.io/proton/guide.html')
+          }
+        }
+      ]
+    }
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -58,7 +113,10 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createMenu()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
