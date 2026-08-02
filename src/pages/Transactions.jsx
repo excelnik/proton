@@ -2,6 +2,7 @@ const React = require('react')
 const { useState, useEffect } = React
 const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
+const { getScopeRange } = require('../lib/viewScope.js')
 
 function generateVirtualTransactions() {
   const virtual = []
@@ -139,7 +140,7 @@ function generateVirtualTransactions() {
   return virtual
 }
 
-function Transactions({ selectedMonth, setSelectedMonth }) {
+function Transactions({ viewScope, setViewScope }) {
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -258,9 +259,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
 
   function loadData() {
     const dateCol = getDateColumn()
-    const isAllTime = selectedMonth === 'all'
-    const from = isAllTime ? '1900-01-01' : `${selectedMonth}-01`
-    const to = isAllTime ? '2999-12-31' : `${selectedMonth}-31`
+    const { from, to } = getScopeRange(viewScope)
 
     const txs = db.prepare(`
       SELECT t.*, c.name as category_name, a.name as account_name,
@@ -273,9 +272,10 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       ORDER BY t.transaction_date DESC, t.id DESC
     `).all(from, to)
 
-    // הוסף תנועות וירטואליות של החודש הנוכחי
+    // תנועות וירטואליות מוצגות רק בבחירת חודש בודד — הלוואות ל-20 שנה מייצרות מאות
+    // תשלומים עתידיים, וב"כל הזמנים" הן היו מציפות את הטבלה בשורות לא רלוונטיות
     const virtual = generateVirtualTransactions().filter(v =>
-      v.transaction_date.slice(0, 7) === selectedMonth
+      v.transaction_date.slice(0, 7) === viewScope
     )
     // הוסף שם חשבון לוירטואליות
     const accounts = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
@@ -289,7 +289,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     setAccounts(db.prepare('SELECT * FROM Accounts WHERE is_active=1').all())
   }
 
-  useEffect(() => { loadData() }, [selectedMonth])
+  useEffect(() => { loadData() }, [viewScope])
 
   function handleConfirmVirtual(tx) {
     db.prepare(`
@@ -535,8 +535,8 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
       React.createElement('div', { style: styles.headerActions },
         React.createElement('select', {
           style: styles.select,
-          value: selectedMonth,
-          onChange: e => setSelectedMonth(e.target.value),
+          value: viewScope,
+          onChange: e => setViewScope(e.target.value),
         },
           React.createElement('option', { value: 'all' }, 'כל הזמנים'),
           months.map(m => React.createElement('option', { key: m.val, value: m.val }, m.label))
@@ -1039,7 +1039,7 @@ function Transactions({ selectedMonth, setSelectedMonth }) {
     showModal && React.createElement(AddTransactionModal, {
       categories,
       accounts,
-      selectedMonth,
+      selectedMonth: viewScope,
       onClose: () => setShowModal(false),
       onSave: () => { setShowModal(false); setEditingTx(null); setEditingFull(null); setExpandedTx(null); loadData() },
     }),

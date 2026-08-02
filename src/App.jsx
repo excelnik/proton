@@ -18,10 +18,13 @@ const Categories = require('./pages/Categories.jsx')
 
 function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
-  const [selectedMonth, setSelectedMonth] = useState(() => {
+  // planningMonth: תמיד חודש קונקרטי (YYYY-MM) — לדפים שדורשים תקופת תכנון אחת (Dashboard, Budget, Maaser)
+  const [planningMonth, setPlanningMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  // viewScope: 'all' | 'YYYY' | 'YYYY-MM' — חלון צפייה חופשי, כרגע רק לדף תנועות
+  const [viewScope, setViewScope] = useState('all')
   const [updateNotification, setUpdateNotification] = useState(null)
 
   useEffect(() => {
@@ -90,13 +93,13 @@ function App() {
   }, [])
 
   function renderPage() {
-    if (currentPage === 'dashboard')    return React.createElement(Dashboard, { selectedMonth, setSelectedMonth })
+    if (currentPage === 'dashboard')    return React.createElement(Dashboard, { selectedMonth: planningMonth, setSelectedMonth: setPlanningMonth })
     if (currentPage === 'accounts')     return React.createElement(Accounts)
-    if (currentPage === 'transactions') return React.createElement(Transactions, { selectedMonth, setSelectedMonth })
+    if (currentPage === 'transactions') return React.createElement(Transactions, { viewScope, setViewScope })
     if (currentPage === 'import') return React.createElement(Import, { onNavigate: setCurrentPage })
     if (currentPage === 'categorize') return React.createElement(Categorize)
-    if (currentPage === 'budget') return React.createElement(Budget, { selectedMonth, setSelectedMonth })
-    if (currentPage === 'maaser') return React.createElement(Maaser, { selectedMonth, setSelectedMonth })
+    if (currentPage === 'budget') return React.createElement(Budget, { selectedMonth: planningMonth, setSelectedMonth: setPlanningMonth })
+    if (currentPage === 'maaser') return React.createElement(Maaser, { selectedMonth: planningMonth, setSelectedMonth: setPlanningMonth })
     if (currentPage === 'settings') return React.createElement(Settings)
     if (currentPage === 'loans') return React.createElement(Loans)
     if (currentPage === 'insurance') return React.createElement(Insurance)
@@ -104,7 +107,7 @@ function App() {
     if (currentPage === 'networth') return React.createElement(NetWorth)
     if (currentPage === 'recurring') return React.createElement(Recurring)
     if (currentPage === 'categories') return React.createElement(Categories)
-    return React.createElement(Dashboard, { selectedMonth, setSelectedMonth })
+    return React.createElement(Dashboard, { selectedMonth: planningMonth, setSelectedMonth: setPlanningMonth })
   }
 
   return React.createElement('div', { style: styles.app },
