@@ -30,6 +30,7 @@ function Categorize() {
       FROM Transactions t
       LEFT JOIN Categories c ON t.category_id = c.id
       LEFT JOIN Accounts a ON t.account_id = a.id
+      WHERE t.is_budgetary = 1
       ORDER BY t.transaction_date DESC, t.id DESC
     `).all()
     setTransactions(txs)
@@ -134,7 +135,7 @@ function Categorize() {
           React.createElement('table', { style: styles.table },
             React.createElement('thead', null,
               React.createElement('tr', null,
-                ['תאריך', 'חשבון', 'בית עסק', 'סכום', 'קטגוריה'].map(h =>
+                ['תאריך', 'חשבון', 'בית עסק', 'הערות', 'סכום', 'קטגוריה'].map(h =>
                   React.createElement('th', { key: h, style: styles.th }, h)
                 )
               )
@@ -156,6 +157,10 @@ function Categorize() {
                   React.createElement('td', { style: styles.td }, tx.transaction_date),
                   React.createElement('td', { style: { ...styles.td, color: '#64748B', fontSize: 12 } }, tx.account_name || '—'),
                   React.createElement('td', { style: { ...styles.td, fontWeight: '500' } }, tx.business_entity || '—'),
+                  React.createElement('td', {
+                    style: { ...styles.td, color: '#64748B', maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+                    title: tx.description || '',
+                  }, tx.description || '—'),
                   React.createElement('td', { style: { ...styles.td } },
                     React.createElement('span', {
                       style: { fontWeight: '600', color: tx.transaction_type === 'Income' ? '#10B981' : '#E11D48' }
