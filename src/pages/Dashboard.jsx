@@ -36,19 +36,9 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       AND substr(${dateCol},1,7)=?
     `).get(selectedMonth).v
 
-    // יתרת בנקים
+    // יתרת בנקים — מעודכנת ידנית בטאב חשבונות (תמיד היתרה האמיתית העדכנית, לא "נכון לחודש שנבחר")
     const bankAccounts = db.prepare("SELECT * FROM Accounts WHERE is_active=1 AND type IN ('Bank','Cash')").all()
-    let bankBalance = 0
-    for (const acc of bankAccounts) {
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN transaction_type='Income' THEN amount ELSE 0 END), 0) as inc,
-          COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
-        FROM Transactions WHERE account_id=?
-        AND transaction_date <= ?
-      `).get(acc.id, selectedMonth === 'all' ? '2999-12-31' : `${selectedMonth}-31`)
-      bankBalance += acc.opening_balance + stats.inc - stats.exp
-    }
+    const bankBalance = bankAccounts.reduce((s, acc) => s + (acc.current_balance ?? 0), 0)
 
     // תקציב
     const budgetTotal = db.prepare(`
@@ -73,13 +63,7 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
     let totalAssets = 0
     for (const acc of allAccounts) {
       if (acc.type === 'Credit_Card') continue
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN transaction_type='Income' THEN amount ELSE 0 END), 0) as inc,
-          COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
-        FROM Transactions WHERE account_id=?
-      `).get(acc.id)
-      const bal = acc.opening_balance + stats.inc - stats.exp
+      const bal = acc.current_balance ?? 0
       if (bal > 0) totalAssets += bal
     }
     try {
@@ -115,16 +99,10 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       } catch { return 0 }
     })()
 
-    const creditDebt = allAccounts.filter(a => a.type === 'Credit_Card').reduce((s, acc) => {
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN transaction_type='Income' THEN amount ELSE 0 END), 0) as inc,
-          COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
-        FROM Transactions WHERE account_id=?
-      `).get(acc.id)
-      const bal = acc.opening_balance + stats.inc - stats.exp
-      return s + (bal < 0 ? Math.abs(bal) : 0)
-    }, 0)
+    // מוסכמה: current_balance של כרטיס אשראי הוא תמיד "כמה חייבים" (מספר חיובי)
+    const creditDebt = allAccounts
+      .filter(a => a.type === 'Credit_Card')
+      .reduce((s, acc) => s + Math.max(0, acc.current_balance ?? 0), 0)
 
     const totalLiabilities = loansTotal + creditDebt
 

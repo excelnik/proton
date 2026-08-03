@@ -28,6 +28,9 @@ try {
 try { db.exec('ALTER TABLE Accounts ADD COLUMN billing_day INTEGER') } catch {}
 try { db.exec('ALTER TABLE Accounts ADD COLUMN settlement_account_id INTEGER REFERENCES Accounts(id)') } catch {}
 try { db.exec('ALTER TABLE Transactions ADD COLUMN settles_credit_card_id INTEGER REFERENCES Accounts(id)') } catch {}
+// ── מיגרציה: יתרת חשבון ידנית (עדכון ידני בטאב חשבונות, במקום חישוב מתנועות) ──
+try { db.exec('ALTER TABLE Accounts ADD COLUMN current_balance REAL') } catch {}
+try { db.exec('ALTER TABLE Accounts ADD COLUMN balance_updated_at TEXT') } catch {}
 
 // ── מיגרציה: קישור תנועות הורה-ילד וקטגוריות נוספות ─────────────────────
 try { db.exec('ALTER TABLE Transactions ADD COLUMN parent_id INTEGER REFERENCES Transactions(id)') } catch {}
@@ -81,7 +84,9 @@ db.exec(`
     opening_balance    REAL    NOT NULL DEFAULT 0,
     is_active          INTEGER NOT NULL DEFAULT 1,
     billing_day            INTEGER,
-    settlement_account_id  INTEGER REFERENCES Accounts(id)
+    settlement_account_id  INTEGER REFERENCES Accounts(id),
+    current_balance        REAL,
+    balance_updated_at     TEXT
   );
 
   CREATE TABLE IF NOT EXISTS Categories (
@@ -244,6 +249,40 @@ if (count.c === 0) {
       ('קרן חירום',    'Savings', '🛟', '#0D9488', 0, 17);
   `)
 }
+
+// מילוי חד-פעמי של current_balance מהחישוב הישן (רק לחשבונות שטרם עודכנו ידנית) —
+// כדי שהמעבר ליתרה ידנית לא "יאפס" יתרות קיימות; רץ פעם אחת בלבד בזכות תנאי IS NULL.
+;(function backfillCurrentBalance() {
+  const rows = db.prepare('SELECT id, type, opening_balance, billing_day FROM Accounts WHERE current_balance IS NULL').all()
+  if (rows.length === 0) return
+
+  const today = new Date().toISOString().slice(0, 10)
+  const bankStmt = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN transaction_type='Income'  THEN amount ELSE 0 END), 0) as inc,
+      COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
+    FROM Transactions WHERE account_id=? AND COALESCE(value_date, transaction_date) <= ?
+  `)
+  const creditStmt = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) as total
+    FROM Transactions
+    WHERE account_id=? AND transaction_type='Expense'
+      AND COALESCE(value_date, transaction_date) > ?
+  `)
+  const update = db.prepare("UPDATE Accounts SET current_balance=?, balance_updated_at=datetime('now','localtime') WHERE id=?")
+
+  for (const acc of rows) {
+    let balance
+    if (acc.type === 'Credit_Card') {
+      // יתרת אשראי ישנה חושבה כ"הוצאות מאז תאריך חיוב אחרון" — במוסכמה החדשה זה כבר "כמה אני חייב" (מספר חיובי)
+      balance = creditStmt.get(acc.id, getLastBillingDate(acc.billing_day)).total
+    } else {
+      const stats = bankStmt.get(acc.id, today)
+      balance = acc.opening_balance + stats.inc - stats.exp
+    }
+    update.run(balance, acc.id)
+  }
+})()
 
 function getDateColumn() {
   try {

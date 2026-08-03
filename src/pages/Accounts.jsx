@@ -6,6 +6,7 @@ function Accounts() {
   const [accounts, setAccounts] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [editAccount, setEditAccount] = useState(null)
+  const [balanceAccount, setBalanceAccount] = useState(null)
 
   useEffect(() => {
     const handler = e => {
@@ -19,34 +20,9 @@ function Accounts() {
   }, [])
 
   function loadAccounts() {
+    // היתרה מעודכנת ידנית ע"י המשתמש (ראו כפתור "עדכן יתרה") — לא נגזרת מתנועות
     const accs = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
-    const today = new Date().toISOString().slice(0, 10)
-
-    const result = accs.map(acc => {
-      if (acc.type === 'Credit_Card') {
-        // יתרת כרטיס אשראי = סכום קניות מאז תאריך החיוב האחרון
-        const lastBilling = db.getLastBillingDate(acc.billing_day)
-        const stats = db.prepare(`
-          SELECT COALESCE(SUM(amount), 0) as total
-          FROM Transactions
-          WHERE account_id=? AND transaction_type='Expense'
-            AND COALESCE(value_date, transaction_date) > ?
-        `).get(acc.id, lastBilling)
-        return { ...acc, balance: stats.total }
-      }
-
-      // עו"ש ומזומן - חישוב כרגיל, רק עם הגבלה לתאריך עד היום (לא לוקח תנועות עתידיות)
-      const stats = db.prepare(`
-        SELECT
-          COALESCE(SUM(CASE WHEN transaction_type='Income'  THEN amount ELSE 0 END), 0) as inc,
-          COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END), 0) as exp
-        FROM Transactions
-        WHERE account_id=? AND COALESCE(value_date, transaction_date) <= ?
-      `).get(acc.id, today)
-      return { ...acc, balance: acc.opening_balance + stats.inc - stats.exp }
-    })
-
-    setAccounts(result)
+    setAccounts(accs.map(acc => ({ ...acc, balance: acc.current_balance ?? 0 })))
   }
 
   useEffect(() => { loadAccounts() }, [])
@@ -54,6 +30,14 @@ function Accounts() {
   const fmt = n => '₪' + n.toLocaleString('he-IL')
   const TYPE_ICONS  = { Bank: '🏦', Credit_Card: '💳', Cash: '💵' }
   const TYPE_LABELS = { Bank: 'עו״ש', Credit_Card: 'אשראי', Cash: 'מזומן' }
+
+  function relativeUpdated(dateStr) {
+    if (!dateStr) return 'לא עודכן מעולם'
+    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
+    if (days <= 0) return 'עודכן היום'
+    if (days === 1) return 'עודכן אתמול'
+    return `עודכן לפני ${days} ימים`
+  }
 
   return React.createElement('div', { style: styles.page },
     React.createElement('div', { style: styles.header },
@@ -82,9 +66,15 @@ function Accounts() {
               ),
               React.createElement('p', { style: styles.cardName }, acc.name),
               React.createElement('p', { style: styles.cardBalance }, fmt(acc.balance)),
-              React.createElement('p', { style: styles.cardSub }, `יתרת פתיחה: ${fmt(acc.opening_balance)}`),
+              React.createElement('p', { style: styles.cardSub },
+                acc.type === 'Credit_Card' ? 'יתרת חוב נוכחית' : 'יתרה נוכחית',
+                ' · ', relativeUpdated(acc.balance_updated_at)),
               React.createElement('button', {
-                style: { ...styles.btnSecondary, width: '100%', marginTop: 12, fontSize: 12 },
+                style: { ...styles.btnPrimary, width: '100%', marginTop: 12, fontSize: 12 },
+                onClick: () => setBalanceAccount(acc),
+              }, '💰 עדכן יתרה'),
+              React.createElement('button', {
+                style: { ...styles.btnSecondary, width: '100%', marginTop: 8, fontSize: 12 },
                 onClick: () => { setEditAccount(acc); setShowModal(true) },
               }, '✏️ ערוך חשבון'),
               React.createElement('div', { style: { display: 'flex', gap: 6, marginTop: 12 } },
@@ -121,6 +111,49 @@ function Accounts() {
       onClose: () => { setShowModal(false); setEditAccount(null) },
       onSave:  () => { setShowModal(false); setEditAccount(null); loadAccounts() },
     }),
+
+    balanceAccount && React.createElement(BalanceModal, {
+      account: balanceAccount,
+      onClose: () => setBalanceAccount(null),
+      onSave:  () => { setBalanceAccount(null); loadAccounts() },
+    }),
+  )
+}
+
+function BalanceModal({ account, onClose, onSave }) {
+  const [value, setValue] = useState(account.current_balance?.toString() ?? '0')
+  const isCredit = account.type === 'Credit_Card'
+
+  function handleSave() {
+    const num = parseFloat(value)
+    if (isNaN(num)) return
+    db.prepare("UPDATE Accounts SET current_balance=?, balance_updated_at=datetime('now','localtime') WHERE id=?")
+      .run(num, account.id)
+    onSave()
+  }
+
+  return React.createElement('div', { style: styles.overlay },
+    React.createElement('div', { style: { ...styles.modal, maxWidth: 360 } },
+      React.createElement('div', { style: styles.modalHeader },
+        React.createElement('h2', { style: styles.modalTitle }, `עדכון יתרה — ${account.name}`),
+        React.createElement('button', { style: styles.closeBtn, onClick: onClose }, '✕'),
+      ),
+      React.createElement('div', { style: styles.modalBody },
+        Field(isCredit ? 'כמה אני חייב עכשיו על הכרטיס (₪)' : 'היתרה בחשבון עכשיו (₪)', React.createElement('input', {
+          style: styles.input,
+          type: 'number',
+          autoFocus: true,
+          value,
+          onChange: e => setValue(e.target.value),
+        })),
+        React.createElement('p', { style: { fontSize: 12, color: '#94A3B8' } },
+          'הזן את הסכום כפי שהוא מופיע היום באפליקציית הבנק/האשראי שלך.'),
+      ),
+      React.createElement('div', { style: styles.modalFooter },
+        React.createElement('button', { style: styles.btnSecondary, onClick: onClose }, 'ביטול'),
+        React.createElement('button', { style: styles.btnPrimary, onClick: handleSave }, 'שמור'),
+      ),
+    )
   )
 }
 
@@ -138,11 +171,16 @@ function AccountModal({ editAccount, onClose, onSave }) {
     const settlementVal = type === 'Credit_Card' ? (parseInt(settlementAccountId) || null) : null
 
     if (editAccount) {
+      // שים לב: היתרה עצמה (current_balance) לא נוגעת כאן — עדכון יתרה נעשה רק דרך כפתור "עדכן יתרה"
       db.prepare('UPDATE Accounts SET name=?, type=?, opening_balance=?, billing_day=?, settlement_account_id=? WHERE id=?')
         .run(name.trim(), type, parseFloat(openingBalance) || 0, billingDayVal, settlementVal, editAccount.id)
     } else {
-      db.prepare('INSERT INTO Accounts (name, type, opening_balance, billing_day, settlement_account_id) VALUES (?, ?, ?, ?, ?)')
-        .run(name.trim(), type, parseFloat(openingBalance) || 0, billingDayVal, settlementVal)
+      // בחשבון חדש היתרה הנוכחית מתחילה שווה ליתרת הפתיחה שהוזנה
+      const initial = parseFloat(openingBalance) || 0
+      db.prepare(`INSERT INTO Accounts
+        (name, type, opening_balance, billing_day, settlement_account_id, current_balance, balance_updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))`)
+        .run(name.trim(), type, initial, billingDayVal, settlementVal, initial)
     }
     onSave()
   }
@@ -178,7 +216,7 @@ function AccountModal({ editAccount, onClose, onSave }) {
           value: openingBalance,
           onChange: e => setOpeningBalance(e.target.value),
         })),
-        type === 'Credit_Card' && Field('יום חיוב בחודש', React.createElement('input', {
+        type === 'Credit_Card' && Field('יום חיוב בחודש (לתזכורת בלבד)', React.createElement('input', {
           style: styles.input,
           type: 'number',
           min: 1,
@@ -187,6 +225,8 @@ function AccountModal({ editAccount, onClose, onSave }) {
           value: billingDay,
           onChange: e => setBillingDay(e.target.value),
         })),
+        type === 'Credit_Card' && React.createElement('p', { style: { fontSize: 11, color: '#94A3B8', marginTop: -12, marginBottom: 16 } },
+          'לשימושך בלבד כתזכורת — לא משפיע על שום חישוב. את יתרת החוב מעדכנים ידנית בכפתור "עדכן יתרה".'),
         type === 'Credit_Card' && Field('חשבון בנק מחויב', React.createElement('select', {
           style: styles.input,
           value: settlementAccountId,

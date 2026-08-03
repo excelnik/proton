@@ -18,14 +18,10 @@ const { fetchPrices, searchTicker, getUsdToIls } = require('../db/priceService.j
 })()
 
 // ─── חישובי עזר ──────────────────────────────────────────────────────────
+// היתרה מעודכנת ידנית ע"י המשתמש בטאב חשבונות (לא נגזרת מתנועות).
+// מוסכמה: עבור כרטיס אשראי current_balance הוא תמיד "כמה חייבים" (מספר חיובי).
 function getAccountBalance(acc) {
-  const s = db.prepare(`
-    SELECT
-      COALESCE(SUM(CASE WHEN transaction_type='Income'  THEN amount ELSE 0 END),0) as inc,
-      COALESCE(SUM(CASE WHEN transaction_type='Expense' THEN amount ELSE 0 END),0) as exp
-    FROM Transactions WHERE account_id=?
-  `).get(acc.id)
-  return acc.opening_balance + s.inc - s.exp
+  return acc.current_balance ?? 0
 }
 
 function getLoanBalance(loan) {
@@ -189,7 +185,7 @@ function NetWorth() {
     const assetsTotal    = assets.reduce((s, a) => s + getAssetValueIls(a, priceMap, usdRate), 0)
     const totalAssets    = bankTotal + assetsTotal
     const loansTotal     = loans.reduce((s, l) => s + getLoanBalance(l), 0)
-    const creditTotal    = creditCards.reduce((s, a) => { const b = getAccountBalance(a); return s + (b < 0 ? Math.abs(b) : 0) }, 0)
+    const creditTotal    = creditCards.reduce((s, a) => s + Math.max(0, getAccountBalance(a)), 0)
     const informalTotal  = informalDebts.filter(d => d.direction === 'borrowed').reduce((s, d) => s + d.amount, 0)
     const totalLiabilities = loansTotal + creditTotal + informalTotal + overdraftTotal
     return { bankTotal, assetsTotal, totalAssets, loansTotal, creditTotal, informalTotal, overdraftTotal, totalLiabilities, netWorth: totalAssets - totalLiabilities }
@@ -421,8 +417,8 @@ function NetWorth() {
 
           calculated.creditTotal > 0 && React.createElement(LiabilityGroup, {
             icon: '💳', title: 'כרטיסי אשראי',
-            items: accounts.filter(a => a.type === 'Credit_Card' && getAccountBalance(a) < 0).map(acc => ({
-              name: acc.name, value: Math.abs(getAccountBalance(acc)), badge: 'credit',
+            items: accounts.filter(a => a.type === 'Credit_Card' && getAccountBalance(a) > 0).map(acc => ({
+              name: acc.name, value: getAccountBalance(acc), badge: 'credit',
             })),
           }),
 
