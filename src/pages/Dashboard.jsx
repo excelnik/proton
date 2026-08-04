@@ -2,6 +2,7 @@ const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
+const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
 const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } = require('recharts')
 
 function Dashboard({ selectedMonth, setSelectedMonth }) {
@@ -75,26 +76,9 @@ function Dashboard({ selectedMonth, setSelectedMonth }) {
       try {
         const loans = db.prepare('SELECT * FROM Liabilities WHERE is_active=1').all()
         return loans.reduce((s, loan) => {
-          const monthlyRate = loan.interest_rate / 100 / 12
-          const activeDuration = loan.duration_months - (loan.grace_period_months || 0)
-          const pmt = monthlyRate === 0
-            ? loan.total_amount / activeDuration
-            : (loan.total_amount * monthlyRate * Math.pow(1 + monthlyRate, activeDuration)) /
-              (Math.pow(1 + monthlyRate, activeDuration) - 1)
-          let balance = loan.total_amount
-          const start = new Date(loan.first_payment_date)
-          const today = new Date()
-          const monthsPassed = Math.max(0, Math.min(
-            (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()),
-            loan.duration_months
-          ))
-          for (let i = 0; i < monthsPassed; i++) {
-            if (i >= (loan.grace_period_months || 0)) {
-              const interest = balance * monthlyRate
-              balance = Math.max(0, balance - (pmt - interest))
-            }
-          }
-          return s + balance
+          const schedule = generateAmortization(loan)
+          const idx = getCurrentMonthIndex(loan)
+          return s + (schedule[idx]?.opening_principal ?? 0)
         }, 0)
       } catch { return 0 }
     })()

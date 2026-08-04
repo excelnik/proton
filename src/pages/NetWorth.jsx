@@ -3,6 +3,7 @@ const React = require('react')
 const { useState, useEffect, useMemo, useRef, useCallback } = React
 const db = require('../db/index.js')
 const { fetchPrices, searchTicker, getUsdToIls } = require('../db/priceService.js')
+const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
 
 // ─── מיגרציה guard (בטוח לריצה חוזרת) ──────────────────────────────────
 ;(function migrate() {
@@ -26,26 +27,9 @@ function getAccountBalance(acc) {
 
 function getLoanBalance(loan) {
   if (!loan.first_payment_date) return loan.total_amount
-  const monthlyRate = loan.interest_rate / 100 / 12
-  const activeDuration = loan.duration_months - (loan.grace_period_months || 0)
-  const pmt = monthlyRate === 0
-    ? loan.total_amount / activeDuration
-    : (loan.total_amount * monthlyRate * Math.pow(1 + monthlyRate, activeDuration)) /
-      (Math.pow(1 + monthlyRate, activeDuration) - 1)
-  const start = new Date(loan.first_payment_date)
-  const today = new Date()
-  const monthsPassed = Math.max(0, Math.min(
-    (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth()),
-    loan.duration_months
-  ))
-  let balance = loan.total_amount
-  for (let i = 0; i < monthsPassed; i++) {
-    if (i >= (loan.grace_period_months || 0)) {
-      const interest = balance * monthlyRate
-      balance = Math.max(0, balance - (pmt - interest))
-    }
-  }
-  return balance
+  const schedule = generateAmortization(loan)
+  const idx = getCurrentMonthIndex(loan)
+  return schedule[idx]?.opening_principal ?? loan.total_amount
 }
 
 function getAssetValueIls(asset, priceMap, usdRate) {

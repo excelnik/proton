@@ -1,64 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
-
-// ─── מנוע לוח סילוקין שפיצר ───────────────────────────────────────────────
-
-function generateAmortization(loan) {
-  const { total_amount, interest_rate, first_payment_date, duration_months, grace_period_months, grace_type } = loan
-  const monthlyRate = interest_rate / 100 / 12
-  const activeDuration = duration_months - (grace_period_months || 0)
-
-  const pmt = monthlyRate === 0
-    ? total_amount / activeDuration
-    : (total_amount * monthlyRate * Math.pow(1 + monthlyRate, activeDuration)) /
-      (Math.pow(1 + monthlyRate, activeDuration) - 1)
-
-  let balance = total_amount
-  const rows = []
-  const startDate = new Date(first_payment_date)
-
-  for (let i = 0; i < duration_months; i++) {
-    const date = new Date(startDate)
-    date.setMonth(date.getMonth() + i)
-    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-    const isGrace = i < (grace_period_months || 0)
-    const interestPayment = balance * monthlyRate
-    let principalPayment = 0
-    let monthlyPayment = 0
-
-    if (isGrace) {
-      monthlyPayment = grace_type === 'partial' ? interestPayment : 0
-      principalPayment = 0
-    } else {
-      monthlyPayment = pmt
-      principalPayment = pmt - interestPayment
-    }
-
-    const openingBalance = balance
-    balance = Math.max(0, balance - principalPayment)
-
-    rows.push({
-      month: i + 1,
-      date: dateStr,
-      opening_principal: openingBalance,
-      monthly_payment: monthlyPayment,
-      interest_payment: interestPayment,
-      principal_payment: principalPayment,
-      closing_principal: balance,
-      is_grace: isGrace,
-    })
-  }
-  return rows
-}
-
-function getCurrentMonthIndex(loan) {
-  const today = new Date()
-  const start = new Date(loan.first_payment_date)
-  const months = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth())
-  return Math.max(0, Math.min(months, loan.duration_months - 1))
-}
+const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
 
 function fmt(n) { return '₪' + Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 }) }
 
@@ -77,6 +20,7 @@ function Loans() {
   const [showAddTransaction, setShowAddTransaction] = useState(false)
   const [prefillTransaction, setPrefillTransaction] = useState(null)
   const [linkingLoan, setLinkingLoan] = useState(null)
+  const [deleteLoan, setDeleteLoan] = useState(null)
 
   useEffect(() => {
     const handler = e => {
@@ -494,15 +438,29 @@ function LoanModal({ editLoan, onClose, onSave }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
-  // תצוגת PMT בזמן אמת
-  const previewPmt = useMemo(() => {
+  // לוח סילוקין מקדים לפי מה שבטופס כרגע — משמש גם לתשלום החודשי המשוער וגם לתאריך התשלום הראשון בפועל.
+  // בנוי מאותה פונקציה בדיוק שבונה את הלוח האמיתי, כדי שהתצוגה תמיד תשקף נכון גם הלוואות עם גרייס מלא
+  // (ריבית שמצטרפת לקרן) וגם את מספר חודשי הגרייס שנספרים מ"תאריך התחלת ההלוואה".
+  const previewSchedule = useMemo(() => {
     const principal = parseFloat(form.total_amount)
-    const rate = parseFloat(form.interest_rate) / 100 / 12
-    const n = parseInt(form.duration_months) - parseInt(form.grace_period_months || 0)
-    if (!principal || !n || n <= 0) return null
-    if (rate === 0) return principal / n
-    return (principal * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1)
-  }, [form.total_amount, form.interest_rate, form.duration_months, form.grace_period_months])
+    const duration = parseInt(form.duration_months)
+    const grace = parseInt(form.grace_period_months || 0)
+    if (!principal || !duration || duration - grace <= 0) return null
+    return generateAmortization({
+      total_amount: principal,
+      interest_rate: parseFloat(form.interest_rate) || 0,
+      first_payment_date: form.first_payment_date,
+      duration_months: duration,
+      grace_period_months: grace,
+      grace_type: form.grace_type,
+    })
+  }, [form.total_amount, form.interest_rate, form.duration_months, form.grace_period_months, form.grace_type, form.first_payment_date])
+
+  // "תשלום חודשי משוער" = התשלום הקבוע בתקופה הפעילה (אחרי הגרייס, אם יש)
+  const grace = parseInt(form.grace_period_months || 0)
+  const previewPmt = previewSchedule ? previewSchedule[grace]?.monthly_payment ?? null : null
+  // "תשלום ראשון בפועל" = השורה הראשונה שבה באמת גובים משהו (אצל גרייס חלקי זה מיד; אצל גרייס מלא רק אחרי הגרייס)
+  const firstRealPayment = previewSchedule ? previewSchedule.find(r => r.monthly_payment > 0) : null
 
   function handleSave() {
     if (!form.name || !form.total_amount || !form.duration_months) {
@@ -552,9 +510,11 @@ function LoanModal({ editLoan, onClose, onSave }) {
         ),
 
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
-          Field('תאריך תשלום ראשון', React.createElement('input', { style: styles.input, type: 'date', value: form.first_payment_date, onChange: e => set('first_payment_date', e.target.value) })),
+          Field('תאריך התחלת ההלוואה', React.createElement('input', { style: styles.input, type: 'date', value: form.first_payment_date, onChange: e => set('first_payment_date', e.target.value) })),
           Field('מספר תשלומים', React.createElement('input', { style: styles.input, type: 'number', value: form.duration_months, onChange: e => set('duration_months', e.target.value), placeholder: '60' })),
         ),
+        React.createElement('p', { style: { fontSize: 11, color: '#94A3B8', marginTop: -10, marginBottom: 16 } },
+          'מכאן נספרים חודשי הגרייס (אם יש) — התשלום הראשון בפועל יכול להיות מאוחר יותר, ראה חישוב למטה.'),
 
         Field('סוג גרייס', React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'end' } },
             React.createElement('select', { style: styles.input, value: form.grace_type, onChange: e => set('grace_type', e.target.value) },
@@ -575,9 +535,12 @@ function LoanModal({ editLoan, onClose, onSave }) {
                 : React.createElement('div', null),
             )),
 
-        previewPmt && React.createElement('div', { style: { backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, marginTop: 8 } },
-          React.createElement('p', { style: { fontSize: 13, color: '#2563EB', fontWeight: '500' } },
+        previewSchedule && React.createElement('div', { style: { backgroundColor: '#EFF6FF', borderRadius: 10, padding: 12, marginTop: 8 } },
+          previewPmt != null && React.createElement('p', { style: { fontSize: 13, color: '#2563EB', fontWeight: '500' } },
             `תשלום חודשי משוער: ${fmt(previewPmt)}`
+          ),
+          firstRealPayment && React.createElement('p', { style: { fontSize: 12, color: '#2563EB', marginTop: 4 } },
+            `התשלום הראשון בפועל: ${firstRealPayment.date} (${fmt(firstRealPayment.monthly_payment)})`
           ),
         ),
 
