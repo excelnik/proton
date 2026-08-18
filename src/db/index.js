@@ -2,6 +2,7 @@ const Database = require('better-sqlite3')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const { formatLocalDate } = require('../lib/dateUtils.js')
 
 // נתיב ה-DB
 const DB_DIR = process.env.PROTON_DB_PATH
@@ -256,7 +257,7 @@ if (count.c === 0) {
   const rows = db.prepare('SELECT id, type, opening_balance, billing_day FROM Accounts WHERE current_balance IS NULL').all()
   if (rows.length === 0) return
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = formatLocalDate(new Date())
   const bankStmt = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN transaction_type='Income'  THEN amount ELSE 0 END), 0) as inc,
@@ -297,13 +298,13 @@ function getDateColumn() {
 function getLastBillingDate(billingDay) {
   const day = billingDay || 1
   const today = new Date()
-  let last = new Date(today.getFullYear(), today.getMonth(), day)
+  // באיזה חודש חל תאריך החיוב האחרון: הנוכחי, או הקודם אם היום עוד לא הגיע אליו החודש
+  const monthOffset = today.getDate() < day ? -1 : 0
+  // מחושב תמיד מחדש מ-day המקורי (לא משורשר מתאריך שכבר נחתך בחודש אחר) ומוגבל ליום האחרון של אותו חודש
+  const last = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
+  last.setDate(Math.min(day, new Date(last.getFullYear(), last.getMonth() + 1, 0).getDate()))
 
-  if (today.getDate() < day) {
-    last = new Date(today.getFullYear(), today.getMonth() - 1, day)
-  }
-
-  return last.toISOString().slice(0, 10)
+  return formatLocalDate(last)
 }
 
 module.exports = db

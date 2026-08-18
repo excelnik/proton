@@ -21,4 +21,11 @@ function addMonthsClamped(date, months) {
   return d
 }
 
-module.exports = { addMonthsClamped, parseLocalDate }
+// מחזירה 'YYYY-MM-DD' לפי הרכיבים המקומיים של התאריך — לא date.toISOString().slice(0,10),
+// שממיר לזמן UTC ויכול "להזיז" את התאריך המוצג ביום אחד באזורי זמן שאינם UTC.
+function formatLocalDate(date) {
+  const d = date instanceof Date ? date : parseLocalDate(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+module.exports = { addMonthsClamped, parseLocalDate, formatLocalDate }
