@@ -3,6 +3,7 @@ const { useState, useEffect } = React
 const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
 const { getScopeRange } = require('../lib/viewScope.js')
+const { addMonthsClamped, parseLocalDate } = require('../lib/dateUtils.js')
 
 function generateVirtualTransactions() {
   const virtual = []
@@ -18,11 +19,10 @@ function generateVirtualTransactions() {
         (Math.pow(1 + monthlyRate, activeDuration) - 1)
 
     let balance = loan.total_amount
-    const startDate = new Date(loan.first_payment_date)
+    const startDate = parseLocalDate(loan.first_payment_date)
 
     for (let i = 0; i < loan.duration_months; i++) {
-      const date = new Date(startDate)
-      date.setMonth(date.getMonth() + i)
+      const date = addMonthsClamped(startDate, i)
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
       const monthStr = dateStr.slice(0, 7)
 
@@ -65,9 +65,14 @@ function generateVirtualTransactions() {
     const today = new Date()
 
     for (const t of templates) {
+      // עוגן: יום החיוב כפי שחל בחודש הנוכחי (עם clamp אם החודש הנוכחי קצר מדי)
+      const chargeDay = t.charge_day || 1
+      const anchor = new Date(today.getFullYear(), today.getMonth(), 1)
+      anchor.setDate(Math.min(chargeDay, new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()))
+
       // צור תנועות ל-12 חודשים קדימה
       for (let i = 0; i < 12; i++) {
-        const date = new Date(today.getFullYear(), today.getMonth() + i, t.charge_day || 1)
+        const date = addMonthsClamped(anchor, i)
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
         const monthStr = dateStr.slice(0, 7)
 
@@ -103,11 +108,10 @@ function generateVirtualTransactions() {
     for (const t of installments) {
       const paid = t.installments_paid || 0
       const remaining = t.num_installments - paid
-      const startDate = new Date(t.first_charge_date || today)
+      const startDate = t.first_charge_date ? parseLocalDate(t.first_charge_date) : today
 
       for (let i = 0; i < remaining; i++) {
-        const date = new Date(startDate)
-        date.setMonth(date.getMonth() + paid + i)
+        const date = addMonthsClamped(startDate, paid + i)
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
         const monthStr = dateStr.slice(0, 7)
 
