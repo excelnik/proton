@@ -694,7 +694,10 @@ const styles = {
 }
 
 function LinkModal({ loan, onClose, onSave }) {
-  const monthlyPayment = loan.total_amount / (loan.duration_months || 1)
+  // התשלום החודשי האמיתי לתקופה הנוכחית (כולל ריבית/גרייס אם רלוונטי) — לא ממוצע נאיבי
+  const schedule = generateAmortization(loan)
+  const currentIdx = getCurrentMonthIndex(loan)
+  const monthlyPayment = schedule[currentIdx]?.monthly_payment || (loan.total_amount / (loan.duration_months || 1))
   const minAmount = monthlyPayment * 0.85
   const maxAmount = monthlyPayment * 1.15
 
@@ -702,12 +705,13 @@ function LinkModal({ loan, onClose, onSave }) {
     SELECT t.*, a.name as account_name FROM Transactions t
     LEFT JOIN Accounts a ON t.account_id=a.id
     WHERE t.transaction_type='Expense'
+    AND t.account_id=?
     AND t.liability_id IS NULL
     AND (t.source IS NULL OR t.source != 'virtual')
     AND t.amount BETWEEN ? AND ?
     ORDER BY t.transaction_date DESC
     LIMIT 50
-  `).all(minAmount, maxAmount)
+  `).all(loan.account_id, minAmount, maxAmount)
 
   const [candidatesList, setCandidates] = useState(candidates)
 
