@@ -1,6 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
+const { addMonthsClamped } = require('../lib/dateUtils.js')
 
 function Recurring() {
   const [tab, setTab] = useState('recurring')
@@ -41,13 +42,10 @@ function Recurring() {
     `).all()
     for (const t of completed) {
       if (!t.first_charge_date || !t.num_installments) continue
-      const first = new Date(t.first_charge_date)
       const now = new Date()
       let count = 0
-      const d = new Date(first)
-      while (d <= now && count < t.num_installments) {
+      while (count < t.num_installments && addMonthsClamped(t.first_charge_date, count) <= now) {
         count++
-        d.setMonth(d.getMonth() + 1)
       }
       if (count >= t.num_installments) {
         db.prepare('UPDATE Recurring_Templates SET is_active=0 WHERE id=?').run(t.id)
@@ -351,13 +349,10 @@ function InstallmentCard({ template: t, fmt, onEdit, onFinish, onDelete, onLink 
   const [showTxs, setShowTxs] = useState(false)
     const paid = (() => {
     if (!t.first_charge_date) return t.installments_paid || 0
-    const first = new Date(t.first_charge_date)
     const now = new Date()
     let count = 0
-    const d = new Date(first)
-    while (d <= now && count < t.num_installments) {
+    while (count < t.num_installments && addMonthsClamped(t.first_charge_date, count) <= now) {
       count++
-      d.setMonth(d.getMonth() + 1)
     }
     return Math.min(count, t.num_installments)
   })()

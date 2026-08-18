@@ -1,5 +1,6 @@
 // לוח סילוקין להלוואות (שיטת שפיצר) — משותף בין Loans.jsx, Dashboard.jsx ו-NetWorth.jsx
 // כדי שלנוסחה יהיה מקור אמת יחיד ולא כמה עותקים שיכולים להתפצל.
+const { addMonthsClamped, parseLocalDate } = require('./dateUtils.js')
 
 // בונה את לוח הסילוקין המלא של הלוואה, חודש אחר חודש.
 // בגרייס מלא, הריבית שנצברת בכל חודש מצטרפת ליתרת הקרן (קפיטליזציה) במקום להיעלם,
@@ -13,11 +14,10 @@ function generateAmortization(loan) {
   let balance = total_amount
   let pmt = null
   const rows = []
-  const startDate = new Date(first_payment_date)
+  const startDate = parseLocalDate(first_payment_date)
 
   for (let i = 0; i < duration_months; i++) {
-    const date = new Date(startDate)
-    date.setMonth(date.getMonth() + i)
+    const date = addMonthsClamped(startDate, i)
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
     const isGrace = i < graceMonths

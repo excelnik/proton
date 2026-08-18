@@ -2,6 +2,7 @@ const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
 const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
+const { addMonthsClamped } = require('../lib/dateUtils.js')
 
 function fmt(n) { return '₪' + Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 }) }
 
@@ -40,8 +41,7 @@ function Loans() {
     `).all()
     for (const l of activeLiabilities) {
       if (!l.first_payment_date || !l.duration_months) continue
-      const end = new Date(l.first_payment_date)
-      end.setMonth(end.getMonth() + l.duration_months - 1)
+      const end = addMonthsClamped(l.first_payment_date, l.duration_months - 1)
       if (new Date() >= end) {
         db.prepare('UPDATE Liabilities SET is_active=0 WHERE id=?').run(l.id)
       }
