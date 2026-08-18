@@ -12,7 +12,7 @@ function Loans() {
   const [loans, setLoans] = useState([])
   const [showArchive, setShowArchive] = useState(false)
   const [archivedLoans, setArchivedLoans] = useState([])
-  const [selectedLoan, setSelectedLoan] = useState(null)
+  const [selectedLoanId, setSelectedLoanId] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editLoan, setEditLoan] = useState(null)
   const [showFinishModal, setShowFinishModal] = useState(false)
@@ -22,6 +22,9 @@ function Loans() {
   const [prefillTransaction, setPrefillTransaction] = useState(null)
   const [linkingLoan, setLinkingLoan] = useState(null)
   const [deleteLoan, setDeleteLoan] = useState(null)
+
+  // נגזר מ-loans בכל רינדור, לא נשמר כעותק — כדי שיישאר מסונכרן גם אחרי עריכה/רענון
+  const selectedLoan = loans.find(l => l.id === selectedLoanId) ?? null
 
   useEffect(() => {
     const handler = e => {
@@ -71,7 +74,7 @@ function Loans() {
   }, [loans])
 
   function handleFinish(loan) {
-    setSelectedLoan(loan)
+    setSelectedLoanId(loan.id)
     setShowFinishModal(true)
   }
 
@@ -90,7 +93,7 @@ function Loans() {
     db.prepare('DELETE FROM Liabilities WHERE id=?').run(deleteLoan.id)
     setShowDeleteModal(false)
     setDeleteLoan(null)
-    if (selectedLoan?.id === deleteLoan.id) setSelectedLoan(null)
+    if (selectedLoanId === deleteLoan.id) setSelectedLoanId(null)
     loadLoans()
   }
 
@@ -118,7 +121,7 @@ function Loans() {
     }
     db.prepare('UPDATE Liabilities SET is_active=0 WHERE id=?').run(selectedLoan.id)
     setShowFinishModal(false)
-    setSelectedLoan(null)
+    setSelectedLoanId(null)
     loadLoans()
   }
 
@@ -157,8 +160,8 @@ function Loans() {
             : loans.map(loan => React.createElement(LoanCard, {
                 key: loan.id,
                 loan,
-                isSelected: selectedLoan?.id === loan.id,
-                onSelect: () => setSelectedLoan(loan),
+                isSelected: selectedLoanId === loan.id,
+                onSelect: () => setSelectedLoanId(loan.id),
                 onEdit: () => { setEditLoan(loan); setShowModal(true) },
                 onLink: () => setLinkingLoan(loan),
                 onFinish: () => handleFinish(loan),
@@ -216,7 +219,7 @@ function Loans() {
             db.prepare('UPDATE Liabilities SET is_active=0 WHERE id=?').run(selectedLoan.id)
             setShowAddTransaction(false)
             setPrefillTransaction(null)
-            setSelectedLoan(null)
+            setSelectedLoanId(null)
             loadLoans()
         },
     }),
@@ -272,7 +275,7 @@ function Loans() {
 // ─── כרטיס הלוואה ─────────────────────────────────────────────────────────
 
 function LoanCard({ loan, isSelected, onSelect, onEdit, onLink, onFinish, onDelete }) {
-  const schedule = useMemo(() => generateAmortization(loan), [loan.id])
+  const schedule = useMemo(() => generateAmortization(loan), [loan])
   const currentIdx = getCurrentMonthIndex(loan)
   const current = schedule[currentIdx]
   const progress = Math.round((currentIdx / loan.duration_months) * 100)
@@ -338,7 +341,7 @@ function LoanCard({ loan, isSelected, onSelect, onEdit, onLink, onFinish, onDele
 // ─── לוח סילוקין ──────────────────────────────────────────────────────────
 
 function AmortizationPanel({ loan }) {
-  const schedule = useMemo(() => generateAmortization(loan), [loan.id])
+  const schedule = useMemo(() => generateAmortization(loan), [loan])
   const currentIdx = getCurrentMonthIndex(loan)
   // טען תנועות מקושרות
   const linkedTxs = db.prepare(`
