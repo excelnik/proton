@@ -345,13 +345,13 @@ function DepositModal({ goal, fmt, onClose, onSave }) {
   }
 
   function handleSaveOnly() {
-    // שמור רק את הנתון ביעד — ללא תנועה
-    // זה מיועד למקרה שהמשתמש רוצה לעדכן יתרת פתיחה
-    const current = getCurrentBalance(goal.id, goal.starting_balance)
-    const newBalance = type === 'deposit'
-      ? current + parseFloat(amount)
-      : current - parseFloat(amount)
-    db.prepare('UPDATE Savings_Goals SET starting_balance=? WHERE id=?').run(newBalance, goal.id)
+    // מוסיף/מחסיר את הסכום מ-starting_balance עצמו (לא מהסה"כ המחושב) — ללא יצירת תנועה.
+    // getCurrentBalance כבר מוסיפה את התנועות המקושרות מעל starting_balance, אז אסור
+    // לכתוב את הסה"כ בחזרה לשם, אחרת התנועות המקושרות ייספרו פעמיים בפעם הבאה.
+    if (!amount || isNaN(parseFloat(amount))) return
+    const delta = type === 'deposit' ? parseFloat(amount) : -parseFloat(amount)
+    const newStartingBalance = (goal.starting_balance || 0) + delta
+    db.prepare('UPDATE Savings_Goals SET starting_balance=? WHERE id=?').run(newStartingBalance, goal.id)
     onSave()
   }
 

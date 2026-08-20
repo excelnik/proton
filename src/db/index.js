@@ -39,6 +39,8 @@ try { db.exec('ALTER TABLE Transactions ADD COLUMN offset_group_id INTEGER') } c
 try { db.exec('ALTER TABLE Transactions ADD COLUMN insurance_id INTEGER REFERENCES Insurance_Policies(id)') } catch {}
 try { db.exec('ALTER TABLE Transactions ADD COLUMN liability_id INTEGER REFERENCES Liabilities(id)') } catch {}
 try { db.exec('ALTER TABLE Transactions ADD COLUMN recurring_id INTEGER REFERENCES Recurring_Templates(id)') } catch {}
+// ── מיגרציה: קישור תנועה ליעד חיסכון (העמודה נוספה בטעות בעבר ל-Savings_Goals עצמה) ──
+try { db.exec('ALTER TABLE Transactions ADD COLUMN savings_goal_id INTEGER REFERENCES Savings_Goals(id)') } catch {}
 
 // ── מיגרציה: עמודות API לטבלת Assets ────────────────────────────────────
 try { db.exec('ALTER TABLE Assets ADD COLUMN exchange TEXT') } catch {}
@@ -122,7 +124,8 @@ db.exec(`
     parent_id           INTEGER REFERENCES Transactions(id),
     offset_group_id     INTEGER,
     insurance_id        INTEGER REFERENCES Insurance_Policies(id),
-    settles_credit_card_id INTEGER REFERENCES Accounts(id)
+    settles_credit_card_id INTEGER REFERENCES Accounts(id),
+    savings_goal_id     INTEGER REFERENCES Savings_Goals(id)
   );
 
   CREATE TABLE IF NOT EXISTS Budget_Goals (
