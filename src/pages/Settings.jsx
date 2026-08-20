@@ -107,24 +107,32 @@ function Settings() {
   function handleReset() {
     if (resetStep === 0) { setShowResetConfirm(true); setResetStep(1); return }
     if (resetStep === 1) { setResetStep(2); return }
-    // שלב 3 — מחיקה בפועל
-    db.exec(`
-      PRAGMA foreign_keys = OFF;
-      DELETE FROM Transactions;
-      DELETE FROM Budget_Goals;
-      DELETE FROM Liabilities;
-      DELETE FROM Insurance_Policies;
-      DELETE FROM Savings_Goals;
-      DELETE FROM Recurring_Templates;
-      DELETE FROM Assets;
-      DELETE FROM Informal_Debts;
-      DELETE FROM Accounts;
-      DELETE FROM Automation_Rules WHERE match_type NOT IN ('setting','mapping');
-      PRAGMA foreign_keys = ON;
-    `)
+    // שלב 3 — מחיקה בפועל, עטופה בטרנזקציה אחת (הכל או כלום)
+    const deleteAll = db.transaction(() => {
+      db.prepare('DELETE FROM Transactions').run()
+      db.prepare('DELETE FROM Budget_Goals').run()
+      db.prepare('DELETE FROM Liabilities').run()
+      db.prepare('DELETE FROM Insurance_Policies').run()
+      db.prepare('DELETE FROM Savings_Goals').run()
+      db.prepare('DELETE FROM Recurring_Templates').run()
+      db.prepare('DELETE FROM Assets').run()
+      db.prepare('DELETE FROM Informal_Debts').run()
+      db.prepare('DELETE FROM Accounts').run()
+      db.prepare("DELETE FROM Automation_Rules WHERE match_type NOT IN ('setting','mapping')").run()
+    })
+    // אי אפשר לשנות PRAGMA foreign_keys בתוך טרנזקציה (SQLite מתעלם משינוי כזה שם),
+    // אז היא מכובה מחוץ לה — אבל finally מבטיח שהיא תחזור לדלוק גם אם המחיקה נכשלת
+    db.pragma('foreign_keys = OFF')
+    try {
+      deleteAll()
+      alert('✓ המערכת אופסה. כל הנתונים נמחקו.')
+    } catch (e) {
+      alert('❌ שגיאה באיפוס המערכת: ' + e.message + '\n\nהפעולה בוטלה במלואה — שום נתון לא נמחק.')
+    } finally {
+      db.pragma('foreign_keys = ON')
+    }
     setShowResetConfirm(false)
     setResetStep(0)
-    alert('✓ המערכת אופסה. כל הנתונים נמחקו.')
   }
 
   // ──── מחיקה בטוחה של נתונים ────
@@ -188,19 +196,20 @@ function Settings() {
         if (result.success) {
           setDeleteMessage('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון:\n1. הפעל > appwiz.cpl\n2. חפש "Pruton" ו-Uninstall')
           alert('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון דרך:\nהגדרות > אפליקציות > הסר אפליקציה')
-          
+
           // סגור את האפליקציה
           setTimeout(() => {
             ipcRenderer.send('quit-app')
           }, 1000)
         } else {
-          setDeleteMessage('❌ שגיאה בעת מחיקה: ' + result.error)
-          setDeleteStep(0)
+          // חיבור ה-DB כבר נסגר לעיל ולא ניתן לפתוח אותו מחדש בלי להפעיל את פרוטון מחדש —
+          // אסור לתת למשתמש להמשיך להשתמש באפליקציה כאילו כלום לא קרה
+          setDeleteMessage('❌ המחיקה נכשלה: ' + result.error + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+          setDeleteStep(3)
         }
       } catch (e) {
-        setDeleteMessage('❌ שגיאה: ' + e.message)
-        setDeleteStep(0)
-        alert('שגיאה: ' + e.message)
+        setDeleteMessage('❌ שגיאה: ' + e.message + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+        setDeleteStep(3)
       }
     }
   }
@@ -417,6 +426,10 @@ function Settings() {
               deleteStep === 2 && React.createElement('div', { style: { textAlign: 'center' } },
                 React.createElement('p', { style: { fontSize: 12, color: '#94A3B8', marginTop: 8 } }, 'מחכה...')
               ),
+              deleteStep === 3 && React.createElement('button', {
+                style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
+                onClick: () => ipcRenderer.send('quit-app'),
+              }, 'סגור את פרוטון'),
             ),
       ),
     ),
