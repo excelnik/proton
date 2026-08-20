@@ -53,6 +53,10 @@ function Categories() {
   }
 
   function handleDelete(cat) {
+    if (cat.is_system_category) {
+      alert('זו קטגוריית מערכת — לא ניתן למחוק אותה. ניתן להפוך אותה ללא פעילה.')
+      return
+    }
     if (cat.tx_count > 0 || cat.sub_count > 0) {
       alert('לא ניתן למחוק קטגוריה עם תנועות או תת-קטגוריות. ניתן להפוך אותה ללא פעילה.')
       return
@@ -158,8 +162,9 @@ function Categories() {
                 title: cat.is_active ? 'השבת' : 'הפעל',
               }, cat.is_active ? '⏸' : '▶️'),
               React.createElement('button', {
-                style: { ...styles.iconBtn, color: '#E11D48', opacity: cat.tx_count > 0 || cat.sub_count > 0 ? 0.3 : 1 },
+                style: { ...styles.iconBtn, color: '#E11D48', opacity: cat.is_system_category || cat.tx_count > 0 || cat.sub_count > 0 ? 0.3 : 1 },
                 onClick: () => handleDelete(cat),
+                title: cat.is_system_category ? 'קטגוריית מערכת — לא ניתן למחוק' : 'מחק',
               }, '🗑'),
             ),
           ),

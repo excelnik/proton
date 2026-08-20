@@ -3,8 +3,16 @@ const { useState, useEffect } = React
 const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
 
-const DONATION_CATEGORY_ID = 8
 const MAASER_RATE_KEY = 'maaser_rate_setting'
+
+// מחפשת את קטגוריית התרומות בכל פעם מחדש (לא ID קשיח) — כך שגם שחזור גיבוי
+// או סדר יצירה שונה של קטגוריות ברירת המחדל לא ישברו את הזיהוי
+function getDonationCategoryId() {
+  try {
+    const row = db.prepare("SELECT id FROM Categories WHERE is_system_category=1 AND name='תרומות וצדקה'").get()
+    return row ? row.id : null
+  } catch { return null }
+}
 
 function getSavedRate() {
   try {
@@ -33,6 +41,7 @@ function saveRate(rate) {
 function Maaser({ selectedMonth, setSelectedMonth }) {
   const [rate, setRate] = useState(() => getSavedRate())
   const [period, setPeriod] = useState('all')
+  const donationCategoryId = getDonationCategoryId()
   const [summary, setSummary] = useState({
     obligatedIncome: 0, exemptExpenses: 0, taxableBase: 0,
     target: 0, paid: 0, balance: 0,
@@ -66,7 +75,6 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
     const dateCol = getDateColumn()
     const ds = period === 'all' ? '' : `AND ${dateCol} LIKE '${period}%'`
     const dst = period === 'all' ? '' : `AND t.${dateCol} LIKE '${period}%'`
-    console.log('period:', period, 'dst:', dst)
 
     const income = db.prepare(
       `SELECT COALESCE(SUM(amount),0) as v FROM Transactions WHERE transaction_type='Income' AND is_maaser_obligated=1 ${ds}`
@@ -76,11 +84,11 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
         `SELECT COALESCE(SUM(amount),0) as v FROM Transactions 
         WHERE transaction_type='Expense' AND is_maaser_obligated=0 
         AND (category_id IS NULL OR category_id != ?) ${ds}`
-    ).get(DONATION_CATEGORY_ID).v
+    ).get(donationCategoryId).v
 
     const paid = db.prepare(
       `SELECT COALESCE(SUM(amount),0) as v FROM Transactions WHERE transaction_type='Expense' AND category_id=? ${ds}`
-    ).get(DONATION_CATEGORY_ID).v
+    ).get(donationCategoryId).v
 
     const taxableBase = Math.max(0, income - exemptExpenses)
     const maaser10 = taxableBase * 0.1
@@ -126,7 +134,7 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
   const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL')
 
   function getImpact(tx) {
-    const isDonation = tx.category_id === DONATION_CATEGORY_ID
+    const isDonation = tx.category_id === donationCategoryId
     if (isDonation) return { text: `−${fmt(tx.amount)}`, color: '#10B981' }
     if (tx.transaction_type === 'Income' && tx.is_maaser_obligated)
       return { text: `+${fmt(tx.amount * rate)}`, color: '#E11D48' }
@@ -246,7 +254,7 @@ function Maaser({ selectedMonth, setSelectedMonth }) {
             ),
             React.createElement('tbody', null,
               transactions.map(tx => {
-                const isDonation = tx.category_id === DONATION_CATEGORY_ID
+                const isDonation = tx.category_id === donationCategoryId
                 const impact = getImpact(tx)
 
                 // צבע רקע לפי סוג
