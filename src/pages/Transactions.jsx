@@ -4,6 +4,7 @@ const db = require('../db/index.js')
 const { getDateColumn } = require('../db/index.js')
 const { getScopeRange } = require('../lib/viewScope.js')
 const { addMonthsClamped, parseLocalDate } = require('../lib/dateUtils.js')
+const { generateAmortization } = require('../lib/loanAmortization.js')
 
 function generateVirtualTransactions() {
   const virtual = []
@@ -11,40 +12,21 @@ function generateVirtualTransactions() {
   // ─── תנועות וירטואליות מהלוואות ───
   const loans = db.prepare('SELECT * FROM Liabilities WHERE is_active=1').all()
   for (const loan of loans) {
-    const monthlyRate = loan.interest_rate / 100 / 12
-    const activeDuration = loan.duration_months - (loan.grace_period_months || 0)
-    const pmt = monthlyRate === 0
-      ? loan.total_amount / activeDuration
-      : (loan.total_amount * monthlyRate * Math.pow(1 + monthlyRate, activeDuration)) /
-        (Math.pow(1 + monthlyRate, activeDuration) - 1)
+    const schedule = generateAmortization(loan)
 
-    let balance = loan.total_amount
-    const startDate = parseLocalDate(loan.first_payment_date)
-
-    for (let i = 0; i < loan.duration_months; i++) {
-      const date = addMonthsClamped(startDate, i)
-      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-      const monthStr = dateStr.slice(0, 7)
-
-      const isGrace = i < (loan.grace_period_months || 0)
-      const interestPayment = balance * monthlyRate
-      const principalPayment = isGrace ? 0 : pmt - interestPayment
-      const monthlyPayment = isGrace
-        ? (loan.grace_type === 'partial' ? interestPayment : 0)
-        : pmt
-
-      balance = Math.max(0, balance - principalPayment)
+    schedule.forEach((row, i) => {
+      const monthStr = row.date.slice(0, 7)
 
       const covered = db.prepare(`
         SELECT id FROM Transactions
         WHERE liability_id=? AND substr(transaction_date,1,7)=?
       `).get(loan.id, monthStr)
 
-      if (!covered && monthlyPayment > 0) {
+      if (!covered && row.monthly_payment > 0) {
         virtual.push({
           id: `virtual_loan_${loan.id}_${i}`,
-          transaction_date: dateStr,
-          amount: Math.round(monthlyPayment),
+          transaction_date: row.date,
+          amount: Math.round(row.monthly_payment),
           transaction_type: 'Expense',
           business_entity: loan.name,
           category_name: 'החזר הלוואה',
@@ -56,7 +38,7 @@ function generateVirtualTransactions() {
           virtual_source: 'loan',
         })
       }
-    }
+    })
   }
 
   // ─── תנועות וירטואליות מהוראות קבע ───
