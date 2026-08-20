@@ -53,6 +53,8 @@ function Insurance() {
   function confirmDelete() {
     if (!deletePolicy) return
     if (deleteMode === 'delete') {
+      db.prepare('DELETE FROM Transactions WHERE insurance_id=?').run(deletePolicy.id)
+    } else {
       db.prepare('UPDATE Transactions SET insurance_id=NULL WHERE insurance_id=?').run(deletePolicy.id)
     }
     db.prepare('DELETE FROM Insurance_Policies WHERE id=?').run(deletePolicy.id)
