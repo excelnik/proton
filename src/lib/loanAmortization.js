@@ -68,7 +68,7 @@ function generateAmortization(loan) {
 // מחזיר את אינדקס החודש הנוכחי בלוח הסילוקין (0-based), לפי הפרש חודשים קלנדריים מתאריך התשלום הראשון.
 function getCurrentMonthIndex(loan) {
   const today = new Date()
-  const start = new Date(loan.first_payment_date)
+  const start = parseLocalDate(loan.first_payment_date)
   const months = (today.getFullYear() - start.getFullYear()) * 12 + (today.getMonth() - start.getMonth())
   return Math.max(0, Math.min(months, loan.duration_months - 1))
 }

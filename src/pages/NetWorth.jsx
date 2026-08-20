@@ -4,6 +4,7 @@ const { useState, useEffect, useMemo, useRef, useCallback } = React
 const db = require('../db/index.js')
 const { fetchPrices, searchTicker, getUsdToIls } = require('../db/priceService.js')
 const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
+const { addMonthsClamped, formatLocalDate } = require('../lib/dateUtils.js')
 
 // ─── מיגרציה guard (בטוח לריצה חוזרת) ──────────────────────────────────
 ;(function migrate() {
@@ -61,9 +62,7 @@ function getEmergencyData() {
       "SELECT cleaned_name FROM Automation_Rules WHERE original_string='emergency_months' AND match_type='setting'"
     ).get()
     const months = parseInt(row?.cleaned_name || '3')
-    const sixMonthsAgo = new Date()
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-    const from = sixMonthsAgo.toISOString().slice(0, 10)
+    const from = formatLocalDate(addMonthsClamped(new Date(), -6))
     const totalExpenses = db.prepare(`
       SELECT COALESCE(SUM(amount),0) as v FROM Transactions
       WHERE transaction_type='Expense' AND is_budgetary=1 AND transaction_date >= ?
@@ -200,8 +199,7 @@ function NetWorth() {
 
   function getMonthlyChange() {
     try {
-      const lm = new Date(); lm.setMonth(lm.getMonth() - 1)
-      const ym = lm.toISOString().slice(0, 7)
+      const ym = formatLocalDate(addMonthsClamped(new Date(), -1)).slice(0, 7)
       const snap = db.prepare("SELECT net_worth FROM Net_Worth_Snapshots WHERE strftime('%Y-%m',snapshot_date)=? ORDER BY snapshot_date DESC LIMIT 1").get(ym)
       if (!snap) return null
       const diff = calculated.netWorth - snap.net_worth

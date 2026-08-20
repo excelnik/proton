@@ -700,7 +700,7 @@ function LinkModal({ loan, onClose, onSave }) {
   // התשלום החודשי האמיתי לתקופה הנוכחית (כולל ריבית/גרייס אם רלוונטי) — לא ממוצע נאיבי
   const schedule = generateAmortization(loan)
   const currentIdx = getCurrentMonthIndex(loan)
-  const monthlyPayment = schedule[currentIdx]?.monthly_payment || (loan.total_amount / (loan.duration_months || 1))
+  const monthlyPayment = schedule[currentIdx]?.monthly_payment ?? (loan.total_amount / (loan.duration_months || 1))
   const minAmount = monthlyPayment * 0.85
   const maxAmount = monthlyPayment * 1.15
 
