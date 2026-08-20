@@ -323,6 +323,18 @@ function Import({ onNavigate }) {
       }
     }).filter(r => r.amount > 0)
 
+    // סמן כפילויות גם בתוך הקובץ עצמו — לא רק מול ה-DB (למשל טווחי תאריכים חופפים בין שתי הורדות)
+    const seenInFile = new Set()
+    for (const row of rows) {
+      if (!row.accountId) continue
+      const signature = `${row.accountId}|${row.amount}|${row.rawBusiness}|${row.rawDate}`
+      if (seenInFile.has(signature)) {
+        row.isDuplicate = true
+      } else {
+        seenInFile.add(signature)
+      }
+    }
+
     setReviewRows(rows)
     setStep(2)
   }
