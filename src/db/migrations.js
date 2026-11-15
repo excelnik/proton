@@ -58,6 +58,20 @@ function runMigrations(db) {
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS Informal_Debt_Payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_id INTEGER NOT NULL REFERENCES Informal_Debts(id) ON DELETE CASCADE,
+        amount REAL NOT NULL CHECK(amount > 0),
+        payment_date TEXT NOT NULL,
+        transaction_id INTEGER REFERENCES Transactions(id) ON DELETE SET NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_informal_debt_payment_transaction
+        ON Informal_Debt_Payments(transaction_id)
+        WHERE transaction_id IS NOT NULL;
+    `)
     db.prepare(`
       INSERT OR IGNORE INTO Schema_Migrations (name) VALUES (?)
     `).run('repair_missing_columns_v1')
