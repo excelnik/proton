@@ -27,7 +27,7 @@ function createInformalDebt(db, input) {
 function recordInformalDebtPayment(db, input) {
   const amount = Number(input.amount)
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('סכום ההחזר חייב להיות גדול מאפס')
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(input.payment_date || ''))) throw new Error('תאריך החזר לא תקין')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.payment_date || ''))) throw new Error('תאריך החזר לא תקין')
   const debt = db.prepare('SELECT * FROM Informal_Debts WHERE id=? AND is_active=1').get(input.debt_id)
   if (!debt) throw new Error('ההלוואה לא נמצאה או שאינה פעילה')
   const paid = db.prepare('SELECT COALESCE(SUM(amount),0) AS total FROM Informal_Debt_Payments WHERE debt_id=?').get(debt.id).total
