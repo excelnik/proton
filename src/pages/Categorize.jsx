@@ -43,20 +43,28 @@ function Categorize() {
     setSaving(txId)
     db.prepare('UPDATE Transactions SET category_id = ? WHERE id = ?').run(categoryId || null, txId)
 
-    // למידה אוטומטית
+    // הצעת למידה אוטומטית — לעולם לא יוצרים או משנים כלל בלי אישור מפורש.
     if (businessEntity && categoryId) {
+      const merchantKey = businessEntity.trim().toLowerCase()
       const existing = db.prepare(
-        "SELECT id FROM Automation_Rules WHERE original_string = ? AND match_type != 'mapping'"
-      ).get(businessEntity.toLowerCase())
-      if (!existing) {
-        db.prepare(`
-          INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
-          VALUES (?, ?, ?, 'contains', 0, 1)
-        `).run(businessEntity.toLowerCase(), businessEntity, categoryId)
-      } else {
-        db.prepare(
-          'UPDATE Automation_Rules SET category_id = ?, use_count = use_count + 1 WHERE id = ?'
-        ).run(categoryId, existing.id)
+        "SELECT id, category_id FROM Automation_Rules WHERE original_string = ? AND match_type NOT IN ('mapping', 'setting') ORDER BY priority DESC, id DESC"
+      ).get(merchantKey)
+      const selectedCategory = categories.find(c => c.id === Number(categoryId))
+      const categoryLabel = selectedCategory?.name || 'הקטגוריה שנבחרה'
+      const prompt = existing
+        ? `קיים כלל סיווג אוטומטי עבור "${businessEntity}". האם לעדכן אותו ל"${categoryLabel}" עבור תנועות עתידיות?`
+        : `האם לשמור כלל סיווג אוטומטי עבור "${businessEntity}" לקטגוריה "${categoryLabel}" בתנועות עתידיות?`
+      if (confirm(prompt)) {
+        if (!existing) {
+          db.prepare(`
+            INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
+            VALUES (?, ?, ?, 'contains', 0, 1)
+          `).run(merchantKey, businessEntity.trim(), categoryId)
+        } else {
+          db.prepare(
+            'UPDATE Automation_Rules SET category_id = ?, use_count = use_count + 1 WHERE id = ?'
+          ).run(categoryId, existing.id)
+        }
       }
     }
 
