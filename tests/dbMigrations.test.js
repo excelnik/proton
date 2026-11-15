@@ -13,7 +13,7 @@ function makeDatabase() {
     CREATE TABLE Insurance_Policies (id INTEGER PRIMARY KEY);
     CREATE TABLE Liabilities (id INTEGER PRIMARY KEY);
     CREATE TABLE Recurring_Templates (id INTEGER PRIMARY KEY);
-    CREATE TABLE Savings_Goals (id INTEGER PRIMARY KEY);
+    CREATE TABLE Savings_Goals (id INTEGER PRIMARY KEY);\n    CREATE TABLE Informal_Debts (id INTEGER PRIMARY KEY, name TEXT NOT NULL, amount REAL NOT NULL, direction TEXT NOT NULL DEFAULT 'borrowed', due_date TEXT, notes TEXT, is_active INTEGER NOT NULL DEFAULT 1);
   `)
   return db
 }
@@ -41,7 +41,7 @@ test('repairs missing columns in a fresh/minimal schema', () => {
     for (const column of ['exchange', 'last_api_price', 'price_currency', 'price_override', 'price_updated_at', 'purchase_price', 'purchase_date']) {
       assert.ok(assetColumns.includes(column), `Assets.${column} should exist`)
     }
-    assert.equal(db.prepare('SELECT name FROM Schema_Migrations WHERE name=?').get('repair_missing_columns_v1').name, 'repair_missing_columns_v1')
+    assert.equal(db.prepare('SELECT name FROM Schema_Migrations WHERE name=?').get('repair_missing_columns_v1').name, 'repair_missing_columns_v1')\n    assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Informal_Debt_Payments'))
   } finally {
     db.close()
   }
