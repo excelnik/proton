@@ -79,6 +79,7 @@ function Recurring() {
   const summary = useMemo(() => {
     if (tab === 'recurring') {
       const monthly = recurring.reduce((s, t) => {
+        if (t.minimum_commitment === 0 || t.frequency === 'one_off') return s;
         if (t.frequency === 'monthly') return s + t.amount
         if (t.frequency === 'bimonthly') return s + t.amount / 2
         if (t.frequency === 'quarterly') return s + t.amount / 3
@@ -97,7 +98,7 @@ function Recurring() {
       }
     } else {
       const totalDebt = installments.reduce((s, t) => s + t.amount * (t.num_installments - (t.installments_paid || 0)), 0)
-      const monthlyDrop = installments.reduce((s, t) => s + t.amount, 0)
+      const monthlyDrop = installments.reduce((s, t) => t.minimum_commitment === 0 ? s : s + t.amount, 0)
       return {
         s1: { label: 'יתרת חוב כוללת', value: '₪' + Math.round(totalDebt).toLocaleString('he-IL'), color: '#E11D48' },
         s2: { label: 'עלות חודשית', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
@@ -581,6 +582,7 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     is_estimated: editTemplate?.is_estimated ?? 0,
     is_budgetary: editTemplate?.is_budgetary ?? 1,
     is_maaser_obligated: editTemplate?.is_maaser_obligated ?? 1,
+    minimum_commitment: editTemplate?.minimum_commitment ?? 1,
     num_installments: editTemplate?.num_installments?.toString() ?? '',
     total_amount: editTemplate?.total_amount?.toString() ?? '',
     notes: editTemplate?.notes ?? '',
@@ -623,13 +625,13 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       db.prepare(`
         UPDATE Recurring_Templates SET
           name=?, type=?, amount=?, frequency=?, season_months=?, charge_day=?, first_charge_date=?,
-          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?,
+          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?, minimum_commitment=?,
           num_installments=?, total_amount=?, template_payload=?, notes=?
         WHERE id=?
       `).run(
         form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null, editTemplate.id
@@ -638,13 +640,13 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       db.prepare(`
         INSERT INTO Recurring_Templates
           (name, type, amount, frequency, season_months, charge_day, first_charge_date,
-           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated,
+           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated, minimum_commitment,
            num_installments, total_amount, template_payload, notes, is_active, installments_paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
       `).run(
         form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null
@@ -731,6 +733,10 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
             React.createElement('label', { style: styles.checkLabel },
               React.createElement('input', { type: 'checkbox', checked: !!form.is_maaser_obligated, onChange: e => set('is_maaser_obligated', e.target.checked) }),
               ' חייב במעשר'
+            ),
+            React.createElement('label', { style: styles.checkLabel },
+              React.createElement('input', { type: 'checkbox', checked: !!form.minimum_commitment, onChange: e => set('minimum_commitment', e.target.checked) }),
+              ' נכלל בהוצאות מינימום חודשיות'
             ),
           ),
           Field('הערות', React.createElement('input', { style: styles.input, value: form.notes, onChange: e => set('notes', e.target.value), placeholder: 'הערות נוספות...' })),
