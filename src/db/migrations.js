@@ -48,9 +48,22 @@ function runMigrations(db) {
         applied_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS Merchant_Registry (
+        normalized_name TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unrecognized' CHECK(status IN ('known','unrecognized')),
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
     db.prepare(`
       INSERT OR IGNORE INTO Schema_Migrations (name) VALUES (?)
     `).run('repair_missing_columns_v1')
+    db.prepare(`
+      INSERT OR IGNORE INTO Schema_Migrations (name) VALUES (?)
+    `).run('merchant_registry_v1')
   })
 
   apply()
