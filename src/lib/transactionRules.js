@@ -71,9 +71,29 @@ function scoreMerchantRule(merchant, rule) {
   return merchantCoverage * 0.7 + ruleCoverage * 0.3
 }
 
+function findMerchantRuleConflicts(merchant, rules, context = {}) {
+  if (!normalizeMerchantName(merchant)) return []
+  const candidates = filterEligibleRules(rules, context)
+    .map(rule => ({ rule, score: scoreMerchantRule(merchant, rule) }))
+    .filter(item => item.score >= 0.62)
+    .sort((a, b) => b.score - a.score ||
+      (Number(b.rule.priority) || 0) - (Number(a.rule.priority) || 0))
+  if (candidates.length < 2) return []
+  const [best, second] = candidates
+  if (best.score - second.score >= 0.15 ||
+      Number(best.rule.category_id) === Number(second.rule.category_id)) return []
+  return candidates
+    .filter(item => best.score - item.score < 0.15 &&
+      Number(item.rule.category_id) !== Number(best.rule.category_id))
+    .map(item => ({ ...item.rule, _matchScore: item.score }))
+}
+
 function findScopedMerchantRule(merchant, rules, context = {}) {
-  const rule = findBestMerchantRule(merchant, filterEligibleRules(rules, context))
+  const eligible = filterEligibleRules(rules, context)
+  const rule = findBestMerchantRule(merchant, eligible)
   if (rule) return { rule, outOfScope: false }
+  const conflicts = findMerchantRuleConflicts(merchant, eligible, context)
+  if (conflicts.length) return { rule: null, outOfScope: false, conflicts }
   return { rule: null, outOfScope: Boolean(findBestMerchantRule(merchant, rules)) }
 }
 
@@ -103,4 +123,5 @@ module.exports = {
   scoreMerchantRule,
   findBestMerchantRule,
   findScopedMerchantRule,
+  findMerchantRuleConflicts,
 }
