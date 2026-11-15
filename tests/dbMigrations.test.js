@@ -44,6 +44,7 @@ test('repairs missing columns in a fresh/minimal schema', () => {
     }
     assert.equal(db.prepare('SELECT name FROM Schema_Migrations WHERE name=?').get('repair_missing_columns_v1').name, 'repair_missing_columns_v1')
     assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Informal_Debt_Payments'))
+    assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Indirect_Savings'))
   } finally {
     db.close()
   }
