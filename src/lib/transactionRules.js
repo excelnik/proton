@@ -83,8 +83,7 @@ function findMerchantRuleConflicts(merchant, rules, context = {}) {
   if (best.score - second.score >= 0.15 ||
       Number(best.rule.category_id) === Number(second.rule.category_id)) return []
   return candidates
-    .filter(item => best.score - item.score < 0.15 &&
-      Number(item.rule.category_id) !== Number(best.rule.category_id))
+    .filter(item => best.score - item.score < 0.15)
     .map(item => ({ ...item.rule, _matchScore: item.score }))
 }
 
