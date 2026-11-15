@@ -60,6 +60,16 @@ function runMigrations(db) {
       )
     `)
     db.exec(`
+      CREATE TABLE IF NOT EXISTS Indirect_Savings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        saving_date TEXT NOT NULL,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL CHECK(amount > 0),
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.exec(`
       CREATE TABLE IF NOT EXISTS Informal_Debt_Payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         debt_id INTEGER NOT NULL REFERENCES Informal_Debts(id) ON DELETE CASCADE,
