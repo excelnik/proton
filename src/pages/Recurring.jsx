@@ -583,6 +583,7 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     is_budgetary: editTemplate?.is_budgetary ?? 1,
     is_maaser_obligated: editTemplate?.is_maaser_obligated ?? 1,
     minimum_commitment: editTemplate?.minimum_commitment ?? 1,
+    generate_forecast: editTemplate?.generate_forecast ?? 1,
     num_installments: editTemplate?.num_installments?.toString() ?? '',
     total_amount: editTemplate?.total_amount?.toString() ?? '',
     notes: editTemplate?.notes ?? '',
@@ -625,13 +626,13 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       db.prepare(`
         UPDATE Recurring_Templates SET
           name=?, type=?, amount=?, frequency=?, season_months=?, charge_day=?, first_charge_date=?,
-          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?, minimum_commitment=?,
+          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?, minimum_commitment=?, generate_forecast=?,
           num_installments=?, total_amount=?, template_payload=?, notes=?
         WHERE id=?
       `).run(
         form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0, withVirtual ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null, editTemplate.id
@@ -640,13 +641,13 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       db.prepare(`
         INSERT INTO Recurring_Templates
           (name, type, amount, frequency, season_months, charge_day, first_charge_date,
-           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated, minimum_commitment,
+           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated, minimum_commitment, generate_forecast,
            num_installments, total_amount, template_payload, notes, is_active, installments_paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
       `).run(
         form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0, withVirtual ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null
@@ -749,8 +750,8 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       React.createElement('div', { style: { ...styles.modalFooter, justifyContent: 'space-between' } },
         React.createElement('button', { style: styles.btnSecondary, onClick: onClose }, 'ביטול'),
         React.createElement('div', { style: { display: 'flex', gap: 8 } },
-          React.createElement('button', { style: styles.btnSecondary, onClick: () => saveTemplate(false) }, 'שמור ללא תבנית'),
-          React.createElement('button', { style: styles.btnPrimary, onClick: () => saveTemplate(true) }, 'שמור עם תנועות וירטואליות'),
+          React.createElement('button', { style: styles.btnSecondary, onClick: () => saveTemplate(false) }, 'שמור ללא תחזית'),
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => saveTemplate(true) }, 'שמור עם תחזית'),
         ),
       ),
     )
