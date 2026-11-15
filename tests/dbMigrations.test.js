@@ -32,6 +32,7 @@ test('repairs missing columns in a fresh/minimal schema', () => {
       assert.ok(txColumns.includes(column), `Transactions.${column} should exist`)
     }
     assert.ok(recurringColumns.includes('season_months'), 'Recurring_Templates.season_months should exist')
+    assert.ok(recurringColumns.includes('minimum_commitment'), 'Recurring_Templates.minimum_commitment should exist')
     for (const column of ['account_id', 'min_amount', 'max_amount', 'valid_from', 'valid_to', 'enabled']) {
       assert.ok(ruleColumns.includes(column), `Automation_Rules.${column} should exist`)
     }
