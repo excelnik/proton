@@ -45,6 +45,18 @@ test('returns no suggestion when fuzzy matches are weak or ambiguous', () => {
   ]), null)
 })
 
+test('surfaces close merchant rule conflicts for an explicit manual category choice', () => {
+  const { findScopedMerchantRule } = require('../src/lib/transactionRules')
+  const rules = [
+    { original_string: 'supermarket alpha', category_id: 1, enabled: 1 },
+    { original_string: 'supermarket alpha', category_id: 2, enabled: 1 },
+  ]
+  const result = findScopedMerchantRule('supermarket alpha', rules, {})
+  assert.equal(result.rule, null)
+  assert.equal(result.outOfScope, false)
+  assert.equal(result.conflicts.length, 2)
+})
+
 test('allows a strong unique token match but not arbitrary substring matches', () => {
   const { findBestMerchantRule } = require('../src/lib/transactionRules')
   assert.equal(findBestMerchantRule('ACME Store 123', [
