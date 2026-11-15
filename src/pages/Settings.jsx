@@ -3,6 +3,7 @@ const { useState, useEffect } = require('react')
 const db = require('../db/index.js')
 const os = require('os')
 const path = require('path')
+const { listMerchants, setMerchantStatus } = require('../lib/merchantRegistry.js')
 
 const SETTINGS_KEYS = {
   DEFAULT_DAY: 'default_transaction_day',
@@ -44,6 +45,8 @@ function Settings() {
   const [rules, setRules] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [editRule, setEditRule] = useState(null)
+  const [merchants, setMerchants] = useState([])
+  const [showMerchants, setShowMerchants] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetStep, setResetStep] = useState(0)
   const [deleteStep, setDeleteStep] = useState(0) // 0: כפתור | 1: בדיקה | 2: מחיקה
@@ -61,6 +64,12 @@ function Settings() {
   }
 
   useEffect(() => { if (showRules) loadRules() }, [showRules])
+
+  function loadMerchants() {
+    setMerchants(listMerchants(db))
+  }
+
+  useEffect(() => { if (showMerchants) loadMerchants() }, [showMerchants])
 
   function handleSave() {
     saveSetting(SETTINGS_KEYS.DEFAULT_DAY, defaultDay)
@@ -358,6 +367,44 @@ function Settings() {
                   ),
                 )
               )
+            )
+      ),
+    ),
+
+    // ── ניהול עסקים מוכרים ולא מוכרים ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showMerchants ? 14 : 0 } },
+        React.createElement('div', null,
+          React.createElement('h2', { style: styles.sectionTitle }, 'ניהול עסקים'),
+          React.createElement('p', { style: styles.settingDesc }, 'עסקים חדשים מסומנים באדום בייבוא עד לאישור מפורש'),
+        ),
+        React.createElement('button', {
+          style: styles.btnSecondary,
+          onClick: () => setShowMerchants(s => !s),
+        }, showMerchants ? 'סגור' : 'נהל עסקים'),
+      ),
+      showMerchants && React.createElement('div', null,
+        merchants.length === 0
+          ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'עדיין לא זוהו עסקים בקובצי יבוא')
+          : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              merchants.map(merchant => React.createElement('div', {
+                key: merchant.normalized_name,
+                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 10px', borderRadius: 8, border: '1px solid #E2E8F0', backgroundColor: merchant.status === 'known' ? '#fff' : '#FEF2F2' },
+              },
+                React.createElement('div', { style: { minWidth: 0 } },
+                  React.createElement('p', { style: { fontSize: 13, fontWeight: 500, color: '#0F172A' } }, merchant.name),
+                  React.createElement('p', { style: { fontSize: 11, color: merchant.status === 'known' ? '#15803D' : '#B91C1C' } }, merchant.status === 'known' ? 'עסק מוכר ומאושר' : 'עסק לא מוכר — דורש בדיקה'),
+                ),
+                React.createElement('button', {
+                  style: merchant.status === 'known'
+                    ? { ...styles.btnSecondary, fontSize: 11, padding: '5px 8px' }
+                    : { ...styles.btnPrimary, fontSize: 11, padding: '5px 8px' },
+                  onClick: () => {
+                    setMerchantStatus(db, merchant.normalized_name, merchant.status === 'known' ? 'unrecognized' : 'known')
+                    loadMerchants()
+                  },
+                }, merchant.status === 'known' ? 'העבר ללא מוכר' : 'אשר עסק'),
+              ))
             )
       ),
     ),
