@@ -250,7 +250,7 @@ function Transactions({ viewScope, setViewScope }) {
     const { from, to } = getScopeRange(viewScope)
 
     const txs = db.prepare(`
-      SELECT t.*, c.name as category_name, a.name as account_name,
+      SELECT t.*, c.name as category_name, a.name as account_name, a.type as account_type,
         c.parent_id as category_parent_id, cp.name as parent_category_name
       FROM Transactions t
       LEFT JOIN Categories c ON t.category_id = c.id
@@ -270,6 +270,29 @@ function Transactions({ viewScope, setViewScope }) {
     virtual.forEach(v => {
       const acc = accounts.find(a => a.id === v.account_id)
       v.account_name = acc?.name ?? '—'
+    })
+
+    // התרעה זהירה על חיוב אשראי דומה: אותו עסק ואותו סכום בתוך שלושה ימים.
+    // זו אינדיקציה לבדיקה בלבד, לא קביעה שמדובר בהונאה או בכפילות ודאית.
+    const suspicious = db.prepare(`
+      SELECT other.id
+      FROM Transactions current
+      JOIN Accounts account ON account.id=current.account_id
+      JOIN Transactions other ON other.account_id=current.account_id
+        AND other.id<>current.id
+        AND other.transaction_type='Expense'
+        AND lower(trim(COALESCE(other.business_entity,'')))=lower(trim(COALESCE(current.business_entity,'')))
+        AND ABS(other.amount-current.amount)<0.01
+        AND ABS(julianday(other.transaction_date)-julianday(current.transaction_date))<=3
+      WHERE current.id=? AND account.type='Credit_Card'
+        AND current.transaction_type='Expense'
+        AND trim(COALESCE(current.business_entity,''))<>''
+      LIMIT 1
+    `)
+    txs.forEach(tx => {
+      if (tx.account_type === 'Credit_Card' && suspicious.get(tx.id)) {
+        tx.suspicious_reason = 'נמצא חיוב באותו עסק ובאותו סכום בטווח של שלושה ימים'
+      }
     })
 
     setTransactions([...txs, ...virtual])
@@ -732,7 +755,7 @@ function Transactions({ viewScope, setViewScope }) {
                     id: `tx-row-${tx.id}`,
                     style: {
                       ...styles.tr,
-                      backgroundColor: tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : !tx.is_budgetary ? '#F1F5F9' : '#fff',
+                      backgroundColor: tx.suspicious_reason ? '#FEF2F2' : tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : !tx.is_budgetary ? '#F1F5F9' : '#fff',
                       opacity: tx.is_virtual ? 0.85 : 1,
                       cursor: tx.is_virtual ? 'default' : 'pointer',
                     },
@@ -760,6 +783,7 @@ function Transactions({ viewScope, setViewScope }) {
                     React.createElement('td', { style: styles.td }, tx.transaction_date),
                     React.createElement('td', { style: { ...styles.td, fontWeight: '500', maxWidth: 260 } },
                       React.createElement('div', { style: { fontWeight: '500' } }, tx.business_entity || '—'),
+                      tx.suspicious_reason && React.createElement('div', { title: tx.suspicious_reason, style: { fontSize: 10, color: '#B91C1C', marginTop: 3 } }, '⚠ בדוק חיוב אשראי דומה'),
                       tx.description && React.createElement('div', {
                         style: { fontSize: 11, fontWeight: '400', color: '#64748B', marginTop: 3, whiteSpace: 'normal', overflowWrap: 'anywhere' },
                         title: tx.description,
