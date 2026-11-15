@@ -41,7 +41,8 @@ test('repairs missing columns in a fresh/minimal schema', () => {
     for (const column of ['exchange', 'last_api_price', 'price_currency', 'price_override', 'price_updated_at', 'purchase_price', 'purchase_date']) {
       assert.ok(assetColumns.includes(column), `Assets.${column} should exist`)
     }
-    assert.equal(db.prepare('SELECT name FROM Schema_Migrations WHERE name=?').get('repair_missing_columns_v1').name, 'repair_missing_columns_v1')\n    assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Informal_Debt_Payments'))
+    assert.equal(db.prepare('SELECT name FROM Schema_Migrations WHERE name=?').get('repair_missing_columns_v1').name, 'repair_missing_columns_v1')
+    assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Informal_Debt_Payments'))
   } finally {
     db.close()
   }
