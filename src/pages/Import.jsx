@@ -4,6 +4,7 @@ const db = require('../db/index.js')
 const XLSX = require('xlsx')
 const { parseImportDate: parseDate } = require('../lib/importDateUtils.js')
 const { findScopedMerchantRule } = require('../lib/transactionRules.js')
+const { registerMerchant, approveMerchant } = require('../lib/merchantRegistry.js')
 
 const HEADER_KEYWORDS = [
   'תאריך', 'סכום', 'תיאור', 'זכות', 'חובה', 'פעולה',
@@ -274,6 +275,8 @@ function Import({ onNavigate }) {
         isDuplicate = !!checkDup.get(accountId, amount, rawBusiness, rawDate)
       }
 
+      const merchantRecord = rawBusiness ? registerMerchant(db, rawBusiness) : null
+      const unknownMerchant = !!rawBusiness && merchantRecord?.status !== 'known'
       let categoryId = null
       let categoryName = null
       let autoDetected = false
@@ -292,7 +295,7 @@ function Import({ onNavigate }) {
       return {
         rawDate, rawBusiness, valueDate, details,
         amount, txType, accountId, accountName,
-        isDuplicate, categoryId, categoryName, autoDetected, ruleOutOfScope,
+        isDuplicate, categoryId, categoryName, autoDetected, ruleOutOfScope, unknownMerchant,
         usedFallbackDate: !parseDate(rawDateStr),
       }
     }).filter(r => r.amount > 0)
@@ -694,7 +697,7 @@ function Import({ onNavigate }) {
             reviewRows.map((row, i) =>
               React.createElement('tr', {
                 key: i,
-                style: { backgroundColor: row.isDuplicate ? '#FFFBEB' : row.usedFallbackDate ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F1F5F9' }
+                style: { backgroundColor: row.unknownMerchant ? '#FEF2F2' : row.isDuplicate ? '#FFFBEB' : row.usedFallbackDate ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F1F5F9' }
               },
                 React.createElement('td', { style: styles.td },
                   row.usedFallbackDate
@@ -730,7 +733,20 @@ function Import({ onNavigate }) {
                   )
                 ),
                 React.createElement('td', { style: styles.td },
-                  row.isDuplicate
+                  row.unknownMerchant
+                    ? React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                        React.createElement('span', { style: { color: '#DC2626', fontSize: 11, whiteSpace: 'nowrap' } }, '⚠ עסק לא מוכר'),
+                        React.createElement('button', {
+                          style: { border: '1px solid #FCA5A5', background: '#fff', color: '#B91C1C', borderRadius: 5, padding: '3px 6px', fontSize: 10, cursor: 'pointer' },
+                          onClick: () => {
+                            approveMerchant(db, row.rawBusiness)
+                            const next = [...reviewRows]
+                            next[i] = { ...next[i], unknownMerchant: false }
+                            setReviewRows(next)
+                          },
+                        }, 'אשר עסק')
+                      )
+                    : row.isDuplicate
                     ? React.createElement('span', { style: { color: '#F59E0B', fontSize: 12 } }, '⚠ כפולה')
                     : row.ruleOutOfScope
                       ? React.createElement('span', {
