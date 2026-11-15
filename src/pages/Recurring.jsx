@@ -92,7 +92,7 @@ function Recurring() {
       }, 0)
       const annual = monthly * 12
       return {
-        s1: { label: 'סך התחייבויות חודשיות', value: '₪' + Math.round(monthly).toLocaleString('he-IL'), color: '#E11D48' },
+        s1: { label: 'הוצאות מינימום חודשיות', value: '₪' + Math.round(monthly).toLocaleString('he-IL'), color: '#E11D48' },
         s2: { label: 'עלות שנתית', value: '₪' + Math.round(annual).toLocaleString('he-IL'), color: '#F59E0B' },
         s3: { label: 'הוראות קבע פעילות', value: recurring.length.toString(), color: '#2563EB' },
       }
@@ -101,7 +101,7 @@ function Recurring() {
       const monthlyDrop = installments.reduce((s, t) => t.minimum_commitment === 0 ? s : s + t.amount, 0)
       return {
         s1: { label: 'יתרת חוב כוללת', value: '₪' + Math.round(totalDebt).toLocaleString('he-IL'), color: '#E11D48' },
-        s2: { label: 'עלות חודשית', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
+        s2: { label: 'הוצאות מינימום חודשיות', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
         s3: { label: 'עסקאות פעילות', value: installments.length.toString(), color: '#2563EB' },
       }
     }
