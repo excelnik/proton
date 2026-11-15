@@ -49,11 +49,11 @@ function App() {
     })
 
     // שגיאה בעדכון
-    ipcRenderer.on('update-error', (error) => {
+    ipcRenderer.on('update-error', (_event, error) => {
       console.error('שגיאה בעדכון:', error)
       setUpdateNotification({
         type: 'error',
-        message: 'שגיאה בעדכון: ' + error,
+        message: 'שגיאה בעדכון: ' + (error || 'שגיאה לא ידועה'),
       })
     })
 
