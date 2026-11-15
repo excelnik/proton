@@ -139,6 +139,7 @@ function Transactions({ viewScope, setViewScope }) {
   const [filterPanel, setFilterPanel] = useState(false)
   const [filters, setFilters] = useState({ type: '', categoryId: '', accountId: '', amountMin: '', amountMax: '', dateFrom: '', dateTo: '', txId: '', tags: '', linkedType: '' })
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkCategoryParentId, setBulkCategoryParentId] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', dir: 'desc' })
 
   useEffect(() => {
@@ -1029,12 +1030,32 @@ function Transactions({ viewScope, setViewScope }) {
           if (!confirm(`לשנות קטגוריה של ${selectedIds.size} תנועות ל"${catName}"?`)) return
           const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
           selectedIds.forEach(id => stmt.run(catId, id))
-          setSelectedIds(new Set())
+          setBulkCategoryParentId(catId)
           loadData()
         }
       },
         React.createElement('option', { value: '' }, 'שנה קטגוריה...'),
         categories.map(c => React.createElement('option', { key: c.id, value: String(c.id) }, `${c.icon || ''} ${c.name}`))
+      ),
+
+      bulkCategoryParentId && React.createElement('select', {
+        style: { backgroundColor: '#1E293B', color: '#fff', border: '1px solid #334155', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' },
+        value: '',
+        onChange: e => {
+          if (!e.target.value) return
+          const subId = e.target.value
+          const subName = db.prepare('SELECT name FROM Categories WHERE id=?').get(subId)?.name || ''
+          if (!confirm(`לשנות תת־קטגוריה של ${selectedIds.size} תנועות ל״${subName}״?`)) return
+          const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
+          selectedIds.forEach(id => stmt.run(subId, id))
+          setSelectedIds(new Set())
+          setBulkCategoryParentId('')
+          loadData()
+        }
+      },
+        React.createElement('option', { value: '' }, 'שנה תת־קטגוריה...'),
+        db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1 ORDER BY sort_order').all(Number(bulkCategoryParentId))
+          .map(c => React.createElement('option', { key: c.id, value: String(c.id) }, c.name))
       ),
 
       React.createElement('div', { style: { width: 1, height: 20, backgroundColor: '#334155' } }),
