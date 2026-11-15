@@ -281,10 +281,12 @@ function Import({ onNavigate }) {
       let categoryName = null
       let autoDetected = false
       let ruleOutOfScope = false
+      let ruleConflict = false
       if (rawBusiness) {
         const context = { accountId, amount, date: parseDate(rawDateStr) || null }
         const match = findBestRule(rawBusiness, context)
         ruleOutOfScope = match.outOfScope
+        ruleConflict = Array.isArray(match.conflicts) && match.conflicts.length > 0
         if (match.rule) {
           categoryId = match.rule.category_id
           categoryName = match.rule.category_name ?? categories.find(c => c.id === match.rule.category_id)?.name ?? null
@@ -295,7 +297,7 @@ function Import({ onNavigate }) {
       return {
         rawDate, rawBusiness, valueDate, details,
         amount, txType, accountId, accountName,
-        isDuplicate, categoryId, categoryName, autoDetected, ruleOutOfScope, unknownMerchant,
+        isDuplicate, categoryId, categoryName, autoDetected, ruleOutOfScope, ruleConflict, unknownMerchant,
         usedFallbackDate: !parseDate(rawDateStr),
       }
     }).filter(r => r.amount > 0)
@@ -748,6 +750,8 @@ function Import({ onNavigate }) {
                       )
                     : row.isDuplicate
                     ? React.createElement('span', { style: { color: '#F59E0B', fontSize: 12 } }, '⚠ כפולה')
+                    : row.ruleConflict
+                      ? React.createElement('span', { style: { color: '#B91C1C', fontSize: 11, whiteSpace: 'nowrap' }, title: 'נמצאו כללי סיווג דומים עם קטגוריות שונות; יש לבחור קטגוריה ידנית' }, '⚠ כללים מתנגשים — בחר ידנית')
                     : row.ruleOutOfScope
                       ? React.createElement('span', {
                           style: { color: '#B45309', fontSize: 11, whiteSpace: 'nowrap' },
