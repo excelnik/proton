@@ -3,6 +3,7 @@ const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
 const { generateAmortization, getCurrentMonthIndex } = require('../lib/loanAmortization.js')
 const { addMonthsClamped } = require('../lib/dateUtils.js')
+const InformalDebtsPanel = require('../components/InformalDebtsPanel.jsx')
 
 function fmt(n) { return '₪' + Math.abs(n).toLocaleString('he-IL', { maximumFractionDigits: 0 }) }
 
@@ -142,6 +143,8 @@ function Loans() {
       KpiCard('ריבית עתידית', fmt(summary.totalFutureInterest), '#F59E0B'),
       KpiCard('תשלום חודשי כולל', fmt(summary.totalMonthly), '#2563EB'),
     ),
+
+    React.createElement(InformalDebtsPanel),
 
     // Split View
     React.createElement('div', { style: styles.splitView },
