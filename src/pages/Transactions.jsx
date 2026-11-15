@@ -45,7 +45,7 @@ function generateVirtualTransactions() {
 
   // ─── תנועות וירטואליות מהוראות קבע ───
   try {
-    const templates = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring'").all()
+    const templates = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring' AND COALESCE(generate_forecast,1)=1").all()
     const today = new Date()
 
     for (const t of templates) {
@@ -82,7 +82,7 @@ function generateVirtualTransactions() {
     }
 
     // ─── תנועות וירטואליות מעסקאות תשלומים ───
-    const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment'").all()
+    const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
 
     for (const t of installments) {
       const paid = t.installments_paid || 0
