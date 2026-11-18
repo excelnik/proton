@@ -52,6 +52,17 @@ function runMigrations(db) {
       )
     `)
     db.exec(`
+      CREATE TABLE IF NOT EXISTS Budget_Recurring_Imports (
+        budget_period TEXT NOT NULL,
+        recurring_id INTEGER NOT NULL,
+        category_id INTEGER NOT NULL,
+        monthly_amount REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (budget_period, recurring_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_budget_recurring_imports_period
+        ON Budget_Recurring_Imports(budget_period, category_id);
+    `)
+    db.exec(`
       CREATE TABLE IF NOT EXISTS Merchant_Registry (
         normalized_name TEXT PRIMARY KEY,
         name TEXT NOT NULL,
