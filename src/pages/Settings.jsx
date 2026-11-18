@@ -119,6 +119,7 @@ function Settings() {
     // שלב 3 — מחיקה בפועל, עטופה בטרנזקציה אחת (הכל או כלום)
     const deleteAll = db.transaction(() => {
       db.prepare('DELETE FROM Transactions').run()
+      db.prepare('DELETE FROM Budget_Recurring_Imports').run()
       db.prepare('DELETE FROM Budget_Goals').run()
       db.prepare('DELETE FROM Liabilities').run()
       db.prepare('DELETE FROM Insurance_Policies').run()
