@@ -43,8 +43,8 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.4.1-beta.2
-          name: Pruton 0.4.1 Beta 2
+          tag_name: v0.4.2-beta.1
+          name: Pruton 0.4.2 Beta 1
           target_commitish: ${{ github.sha }}
           prerelease: true
           draft: false

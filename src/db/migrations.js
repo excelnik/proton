@@ -10,6 +10,7 @@ function runMigrations(db) {
   const migrations = [
     ['Transactions', 'value_date', 'TEXT'],
     ['Transactions', 'import_id', 'TEXT'],
+    ['Transactions', 'reference', 'TEXT'],
     ['Transactions', 'settles_credit_card_id', 'INTEGER REFERENCES Accounts(id)'],
     ['Transactions', 'parent_id', 'INTEGER REFERENCES Transactions(id)'],
     ['Transactions', 'offset_group_id', 'INTEGER'],

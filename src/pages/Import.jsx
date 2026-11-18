@@ -43,7 +43,7 @@ function getDefaultFallbackMonth() {
 
 const DEFAULT_MAPPING = {
   date_col: '', value_date_col: '', business_col: '',
-  details_col: '', account_col: '',
+  details_col: '', reference_col: '', account_col: '',
   amount_mode: 'single', amount_col: '',
   debit_col: '', credit_col: '',
   amount_type: 'minus_expense',
@@ -124,6 +124,7 @@ function Import({ onNavigate }) {
   const [fallbackMonth, setFallbackMonth] = useState(getDefaultFallbackMonth)
   const [mapping, setMapping] = useState(DEFAULT_MAPPING)
   const [reviewRows, setReviewRows] = useState([])
+  const [reviewFilter, setReviewFilter] = useState('all')
   const [fileName, setFileName] = useState('')
   const [step3Result, setStep3Result] = useState(null)
   const [activeTab, setActiveTab] = useState('new')
@@ -193,7 +194,7 @@ function Import({ onNavigate }) {
     reader.onload = (evt) => {
       const workbook = XLSX.read(evt.target.result, { type: 'array', cellDates: true })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false })
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
       processRows(rawRows)
     }
     reader.readAsArrayBuffer(file)
@@ -216,30 +217,26 @@ function Import({ onNavigate }) {
     const defaultDay = getDefaultDay()
     const fallbackDate = `${fallbackMonth}-${String(defaultDay).padStart(2, '0')}`
 
-    const checkDup = db.prepare(`
-      SELECT id FROM Transactions
-      WHERE account_id=? AND amount=? AND business_entity=?
-      AND ABS(julianday(transaction_date) - julianday(?)) <= 1
-    `)
-
     const noDateCount = { count: 0 }
-
+    const parsedDates = allRows.map(row => mapping.date_col !== '' ? parseDate(row[mapping.date_col]) : '').filter(Boolean).sort()
+    const minDate = parsedDates[0] || fallbackDate, maxDate = parsedDates[parsedDates.length - 1] || fallbackDate
+    const existing = db.prepare("SELECT id,account_id,amount,business_entity,transaction_date,description,reference FROM Transactions WHERE transaction_date BETWEEN date(?,'-1 day') AND date(?,'+1 day')").all(minDate,maxDate)
+    const existingMap = new Map()
+    for (const tx of existing) { const k=`${tx.account_id}|${Number(tx.amount)}|${String(tx.business_entity||'').trim().toLowerCase()}`; if(!existingMap.has(k)) existingMap.set(k,[]); existingMap.get(k).push(tx) }
+    const ruleRows = db.prepare("SELECT r.*,c.name as category_name FROM Automation_Rules r LEFT JOIN Categories c ON r.category_id=c.id WHERE r.match_type NOT IN ('mapping','setting') AND r.category_id IS NOT NULL AND COALESCE(r.enabled,1)=1").all()
+    const merchantCache = new Map()
+    for (const name of new Set(allRows.map(row=>String(row[mapping.business_col]??'').trim()).filter(Boolean))) merchantCache.set(name,registerMerchant(db,name))
     const rows = allRows.map(row => {
-      const rawDateStr = mapping.date_col !== '' ? String(row[mapping.date_col] ?? '').trim() : ''
-      let rawDate = parseDate(rawDateStr)
-
-      // תאריך חסר — השתמש בברירת מחדל
-      if (!rawDate) {
-        rawDate = fallbackDate
-        noDateCount.count++
-      }
-
+      const rawDateValue = mapping.date_col !== '' ? row[mapping.date_col] : ''
+      const rawDateText = String(rawDateValue ?? '').trim(), parsedDate = parseDate(rawDateValue)
+      const dateInvalid = !!rawDateText && !parsedDate
+      let rawDate = parsedDate
+      if (!rawDate && !dateInvalid) { rawDate = fallbackDate; noDateCount.count++ }
       const rawBusiness = String(row[mapping.business_col] ?? '').trim()
-      const valueDate = mapping.value_date_col !== ''
-        ? (parseDate(String(row[mapping.value_date_col] ?? '').trim()) || rawDate)
-        : rawDate
-      const details = mapping.details_col !== ''
-        ? String(row[mapping.details_col] ?? '').trim() : ''
+      const valueDateValue = mapping.value_date_col !== '' ? row[mapping.value_date_col] : ''
+      const valueDate = (mapping.value_date_col !== '' ? parseDate(valueDateValue) : rawDate) || rawDate
+      const details = mapping.details_col !== '' ? String(row[mapping.details_col] ?? '').trim() : ''
+      const reference = mapping.reference_col !== '' ? String(row[mapping.reference_col] ?? '').trim() : ''
       const accountName = mapping.account_col !== ''
         ? String(row[mapping.account_col] ?? '').trim() : ''
 
@@ -270,12 +267,17 @@ function Import({ onNavigate }) {
         if (acc) accountId = acc.id
       }
 
-      let isDuplicate = false
-      if (accountId && amount && rawDate) {
-        isDuplicate = !!checkDup.get(accountId, amount, rawBusiness, rawDate)
+      let isDuplicate = false, duplicateMatch = null
+      if (accountId && amount && rawDate && (reference || details)) {
+        const key=`${accountId}|${Number(amount)}|${rawBusiness.toLowerCase()}`
+        duplicateMatch=(existingMap.get(key)||[]).find(tx=>{
+          const days=Math.abs((new Date(`${tx.transaction_date}T00:00:00`).getTime()-new Date(`${rawDate}T00:00:00`).getTime())/86400000)
+          if(days>1)return false
+          return reference ? String(tx.reference||'').trim()===reference : String(tx.description||'').trim()===details
+        })||null
+        isDuplicate=!!duplicateMatch
       }
-
-      const merchantRecord = rawBusiness ? registerMerchant(db, rawBusiness) : null
+      const merchantRecord = rawBusiness ? merchantCache.get(rawBusiness) : null
       const unknownMerchant = !!rawBusiness && merchantRecord?.status !== 'known'
       let categoryId = null
       let categoryName = null
@@ -283,8 +285,8 @@ function Import({ onNavigate }) {
       let ruleOutOfScope = false
       let ruleConflict = false
       if (rawBusiness) {
-        const context = { accountId, amount, date: parseDate(rawDateStr) || null }
-        const match = findBestRule(rawBusiness, context)
+        const context = { accountId, amount, date: parsedDate || null }
+        const match = findScopedMerchantRule(rawBusiness, ruleRows, context)
         ruleOutOfScope = match.outOfScope
         ruleConflict = Array.isArray(match.conflicts) && match.conflicts.length > 0
         if (match.rule) {
@@ -295,23 +297,22 @@ function Import({ onNavigate }) {
       }
 
       return {
-        rawDate, rawBusiness, valueDate, details,
+        rawDate, rawBusiness, valueDate, details, reference,
         amount, txType, accountId, accountName,
-        isDuplicate, categoryId, categoryName, autoDetected, ruleOutOfScope, ruleConflict, unknownMerchant,
-        usedFallbackDate: !parseDate(rawDateStr),
+        isDuplicate, duplicateMatch, dateInvalid, categoryId, categoryName, autoDetected, ruleOutOfScope, ruleConflict, unknownMerchant,
+        usedFallbackDate: !rawDateText,
       }
     }).filter(r => r.amount > 0)
 
     // סמן כפילויות גם בתוך הקובץ עצמו — לא רק מול ה-DB (למשל טווחי תאריכים חופפים בין שתי הורדות)
-    const seenInFile = new Set()
-    for (const row of rows) {
-      if (!row.accountId) continue
-      const signature = `${row.accountId}|${row.amount}|${row.rawBusiness}|${row.rawDate}`
-      if (seenInFile.has(signature)) {
-        row.isDuplicate = true
-      } else {
-        seenInFile.add(signature)
-      }
+    const seenInFile = new Map()
+    for (const [index,row] of rows.entries()) {
+      if (!row.accountId || row.dateInvalid) continue
+      const identity=row.reference?`ref:${row.reference}`:row.details?`details:${row.details}`:''
+      if(!identity) continue
+      const signature=`${row.accountId}|${row.amount}|${row.rawBusiness.trim().toLowerCase()}|${row.rawDate}|${identity}`
+      if(seenInFile.has(signature)){row.isDuplicate=true;row.duplicateMatch={source:'file',rowNumber:seenInFile.get(signature)}}
+      else seenInFile.set(signature,index+1)
     }
 
     setReviewRows(rows)
@@ -319,15 +320,15 @@ function Import({ onNavigate }) {
   }
 
   function handleImport(includeAll) {
-    const toImport = reviewRows.filter(r => includeAll || !r.isDuplicate)
+    const toImport = reviewRows.filter(r => !r.dateInvalid && (includeAll || !r.isDuplicate))
 
     const importId = `import_${Date.now()}`
 
     const insertTx = db.prepare(`
       INSERT INTO Transactions
         (transaction_date, value_date, amount, transaction_type, business_entity,
-         description, category_id, account_id, is_budgetary, is_maaser_obligated, source, import_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'import', ?)
+         description, category_id, account_id, is_budgetary, is_maaser_obligated, source, import_id, reference)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'import', ?, ?)
     `)
 
     const importAll = db.transaction(() => {
@@ -337,7 +338,7 @@ function Import({ onNavigate }) {
           row.rawDate, row.valueDate || row.rawDate,
           row.amount, row.txType, row.rawBusiness,
           row.details || null, row.categoryId, row.accountId,
-          importId
+          importId, row.reference || null
         )
             // שמור חוק אוטומטי
             if (row.rawBusiness && row.categoryId) {
@@ -366,10 +367,12 @@ function Import({ onNavigate }) {
 
   const setMap = (k, v) => setMapping(m => ({ ...m, [k]: v }))
   const needsAccountCol = !selectedAccount
-  const newCount  = reviewRows.filter(r => !r.isDuplicate).length
-  const dupCount  = reviewRows.filter(r => r.isDuplicate).length
-  const autoCount = reviewRows.filter(r => r.autoDetected).length
-  const fallbackCount = reviewRows.filter(r => r.usedFallbackDate).length
+  const newCount=reviewRows.filter(r=>!r.isDuplicate&&!r.dateInvalid).length
+  const dupCount=reviewRows.filter(r=>r.isDuplicate).length
+  const autoCount=reviewRows.filter(r=>r.autoDetected).length
+  const fallbackCount=reviewRows.filter(r=>r.usedFallbackDate).length
+  const invalidDateCount=reviewRows.filter(r=>r.dateInvalid).length
+  const visibleReviewRows=reviewRows.map((row,index)=>({row,index})).filter(({row})=>reviewFilter==='all'||(reviewFilter==='duplicates'&&row.isDuplicate)||(reviewFilter==='new'&&!row.isDuplicate&&!row.dateInvalid)||(reviewFilter==='dateErrors'&&row.dateInvalid)
 
   const monthOptions = Array.from({ length: 24 }, (_, i) => {
     const d = new Date()
@@ -584,6 +587,7 @@ function Import({ onNavigate }) {
         ColSelect('בית עסק *', mapping.business_col, v => setMap('business_col', v), headers, true),
         ColSelect('תאריך ערך', mapping.value_date_col, v => setMap('value_date_col', v), headers, false),
         ColSelect('פרטים נוספים', mapping.details_col, v => setMap('details_col', v), headers, false),
+        ColSelect('אסמכתא / מספר פעולה', mapping.reference_col, v => setMap('reference_col', v), headers, false),
         needsAccountCol && ColSelect('שם חשבון *', mapping.account_col, v => setMap('account_col', v), headers, true),
       ),
 
@@ -681,7 +685,9 @@ function Import({ onNavigate }) {
             }, `יבא הכל (${reviewRows.length})`),
           )
         ),
-        fallbackCount > 0 && React.createElement('p', { style: { fontSize: 12, color: '#F59E0B', margin: 0 } },
+        React.createElement('div',{style:{display:'flex',gap:6,padding:'8px 20px',borderBottom:'1px solid #E2E8F0',flexWrap:'wrap'}},[['all','הכול'],['new','חדשות'],['duplicates','כפולות בלבד'],['dateErrors','תאריכים לבדיקה']].map(([value,label])=>React.createElement('button',{key:value,style:{...styles.btnSecondary,...(reviewFilter===value?styles.typeBtnActive:{})},onClick:()=>setReviewFilter(value)},label))),
+      invalidDateCount>0&&React.createElement('p',{style:{padding:'8px 20px',color:'#DC2626',fontSize:12,margin:0}},`⚠ ${invalidDateCount} תנועות עם תאריך לא תקין לא ייובאו.`),
+      fallbackCount > 0 && React.createElement('p', { style: { fontSize: 12, color: '#F59E0B', margin: 0 } },
           `📅 ${fallbackCount} שורות ללא תאריך יקבלו תאריך ברירת מחדל: ${fallbackMonth}-${String(getDefaultDay()).padStart(2, '0')}`
         ),
       ),
@@ -690,23 +696,22 @@ function Import({ onNavigate }) {
         React.createElement('table', { style: { ...styles.table, width: '100%' } },
           React.createElement('thead', { style: { position: 'sticky', top: 0, zIndex: 1 } },
             React.createElement('tr', null,
-              ['תאריך', 'בית עסק', 'סכום', 'חשבון', 'קטגוריה', 'סטטוס'].map(h =>
+              ['תאריך', 'בית עסק', 'פרטים / אסמכתא', 'סכום', 'חשבון', 'קטגוריה', 'סטטוס'].map(h =>
                 React.createElement('th', { key: h, style: styles.th }, h)
               )
             )
           ),
           React.createElement('tbody', null,
-            reviewRows.map((row, i) =>
+            visibleReviewRows.map(({row,index:i}) =>
               React.createElement('tr', {
                 key: i,
                 style: { backgroundColor: row.unknownMerchant ? '#FEF2F2' : row.isDuplicate ? '#FFFBEB' : row.usedFallbackDate ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F1F5F9' }
               },
                 React.createElement('td', { style: styles.td },
-                  row.usedFallbackDate
-                    ? React.createElement('span', { style: { color: '#2563EB' } }, `${row.rawDate} *`)
-                    : row.rawDate
+                  row.dateInvalid ? React.createElement('span',{style:{color:'#DC2626'}},'תאריך לא תקין') : row.usedFallbackDate ? React.createElement('span',{style:{color:'#2563EB'}},`${row.rawDate} *`) : row.rawDate
                 ),
                 React.createElement('td', { style: { ...styles.td, fontWeight: '500' } }, row.rawBusiness || '—'),
+                React.createElement('td',{style:styles.td},`${row.details||'—'}${row.reference?` · אסמכתא: ${row.reference}`:''}`),
                 React.createElement('td', { style: { ...styles.td, color: row.txType === 'Income' ? '#10B981' : '#E11D48', fontWeight: '500' } },
                   `${row.txType === 'Income' ? '+' : '−'}₪${row.amount.toLocaleString('he-IL')}`
                 ),
@@ -748,8 +753,7 @@ function Import({ onNavigate }) {
                           },
                         }, 'אשר עסק')
                       )
-                    : row.isDuplicate
-                    ? React.createElement('span', { style: { color: '#F59E0B', fontSize: 12 } }, '⚠ כפולה')
+                    : row.isDuplicate ? React.createElement('div',null,React.createElement('span',{style:{color:'#F59E0B',fontSize:12}},'⚠ כפולה'),row.duplicateMatch?.source==='file'?React.createElement('div',{style:{fontSize:10,color:'#64748B'}},`זהה לשורה ${row.duplicateMatch.rowNumber} בקובץ`):row.duplicateMatch?React.createElement('div',{style:{fontSize:10,color:'#64748B'}},`תנועה קיימת #${row.duplicateMatch.id} · ${row.duplicateMatch.transaction_date}`):null)
                     : row.ruleConflict
                       ? React.createElement('span', { style: { color: '#B91C1C', fontSize: 11, whiteSpace: 'nowrap' }, title: 'נמצאו כללי סיווג דומים עם קטגוריות שונות; יש לבחור קטגוריה ידנית' }, '⚠ כללים מתנגשים — בחר ידנית')
                     : row.ruleOutOfScope

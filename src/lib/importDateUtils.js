@@ -18,6 +18,11 @@ function formatDateParts(year, month, day) {
 
 function parseImportDate(value) {
   if (value === null || value === undefined || value === '') return ''
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value < 20000 || value > 2958465) return ''
+    const date = new Date(1899, 11, 30); date.setDate(date.getDate() + Math.floor(value))
+    return formatDateParts(date.getFullYear(), date.getMonth() + 1, date.getDate())
+  }
 
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return ''
