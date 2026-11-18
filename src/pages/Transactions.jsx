@@ -10,119 +10,80 @@ const { filterEligibleRules, findBestMerchantRule } = require('../lib/transactio
 
 function generateVirtualTransactions() {
   const virtual = []
-
-  // ─── תנועות וירטואליות מהלוואות ───
   const loans = db.prepare('SELECT * FROM Liabilities WHERE is_active=1').all()
+  const recurring = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring' AND COALESCE(generate_forecast,1)=1").all()
+  const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
+  // Load all links once; never execute a SQL query inside a generated schedule loop.
+  const linked = db.prepare(`
+    SELECT liability_id, recurring_id, COALESCE(value_date, transaction_date) AS tx_date
+    FROM Transactions
+    WHERE liability_id IS NOT NULL OR recurring_id IS NOT NULL
+  `).all()
+  const coveredLoans = new Set()
+  const coveredRecurring = new Set()
+  for (const row of linked) {
+    const month = String(row.tx_date || '').slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(month)) continue
+    if (row.liability_id != null) coveredLoans.add(`${row.liability_id}|${month}`)
+    if (row.recurring_id != null) coveredRecurring.add(`${row.recurring_id}|${month}`)
+  }
+
   for (const loan of loans) {
     const schedule = generateAmortization(loan)
-
     schedule.forEach((row, i) => {
-      const monthStr = row.date.slice(0, 7)
-
-      const covered = db.prepare(`
-        SELECT id FROM Transactions
-        WHERE liability_id=? AND substr(transaction_date,1,7)=?
-      `).get(loan.id, monthStr)
-
-      if (!covered && row.monthly_payment > 0) {
+      const month = row.date.slice(0, 7)
+      if (!coveredLoans.has(`${loan.id}|${month}`) && row.monthly_payment > 0) {
         virtual.push({
-          id: `virtual_loan_${loan.id}_${i}`,
-          transaction_date: row.date,
-          amount: Math.round(row.monthly_payment),
-          transaction_type: 'Expense',
-          business_entity: loan.name,
-          category_name: 'החזר הלוואה',
-          account_id: loan.account_id,
-          liability_id: loan.id,
-          is_virtual: true,
-          is_budgetary: 0,
-          description: `תשלום ${i + 1} מתוך ${loan.duration_months}`,
+          id: `virtual_loan_${loan.id}_${i}`, transaction_date: row.date,
+          amount: Math.round(row.monthly_payment), transaction_type: 'Expense',
+          business_entity: loan.name, category_name: 'החזר הלוואה',
+          account_id: loan.account_id, liability_id: loan.id, is_virtual: true,
+          is_budgetary: 0, description: `תשלום ${i + 1} מתוך ${loan.duration_months}`,
           virtual_source: 'loan',
         })
       }
     })
   }
 
-  // ─── תנועות וירטואליות מהוראות קבע ───
-  try {
-    const templates = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring' AND COALESCE(generate_forecast,1)=1").all()
-    const today = new Date()
+  const today = new Date()
+  for (const template of recurring) {
+    const schedule = generateRecurringDates(template, today, 12)
+    schedule.forEach((date, i) => {
+      const month = date.slice(0, 7)
+      if (!coveredRecurring.has(`${template.id}|${month}`)) {
+        virtual.push({
+          id: `virtual_recurring_${template.id}_${i}`, transaction_date: date,
+          amount: template.amount, transaction_type: 'Expense', business_entity: template.name,
+          category_id: template.category_id, category_name: null, account_id: template.account_id,
+          recurring_id: template.id, is_virtual: true, is_budgetary: template.is_budgetary,
+          description: template.notes || null, virtual_source: 'recurring',
+        })
+      }
+    })
+  }
 
-    for (const t of templates) {
-      const schedule = generateRecurringDates(t, today, 12)
-
-      for (let i = 0; i < schedule.length; i++) {
-        const dateStr = schedule[i]
-        const monthStr = dateStr.slice(0, 7)
-
-        // בדוק אם כבר יש תנועה אמיתית מהתבנית לחודש הזה
-        const covered = db.prepare(`
-          SELECT id FROM Transactions
-          WHERE recurring_id=? AND substr(transaction_date,1,7)=?
-        `).get(t.id, monthStr)
-
-        if (!covered) {
-          virtual.push({
-            id: `virtual_recurring_${t.id}_${i}`,
-            transaction_date: dateStr,
-            amount: t.amount,
-            transaction_type: 'Expense',
-            business_entity: t.name,
-            category_id: t.category_id,
-            category_name: null,
-            account_id: t.account_id,
-            recurring_id: t.id,
-            is_virtual: true,
-            is_budgetary: t.is_budgetary,
-            description: t.notes || null,
-            virtual_source: 'recurring',
-          })
-        }
+  for (const template of installments) {
+    const paid = template.installments_paid || 0
+    const remaining = Math.max(0, (template.num_installments || 0) - paid)
+    const startDate = template.first_charge_date ? parseLocalDate(template.first_charge_date) : today
+    for (let i = 0; i < remaining; i++) {
+      const date = addMonthsClamped(startDate, paid + i)
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      const month = dateStr.slice(0, 7)
+      if (!coveredRecurring.has(`${template.id}|${month}`)) {
+        virtual.push({
+          id: `virtual_installment_${template.id}_${i}`, transaction_date: dateStr,
+          amount: template.amount, transaction_type: 'Expense', business_entity: template.name,
+          category_id: template.category_id, category_name: null, account_id: template.account_id,
+          recurring_id: template.id, is_virtual: true, is_budgetary: template.is_budgetary,
+          description: `תשלום ${paid + i + 1} מתוך ${template.num_installments}`,
+          virtual_source: 'installment',
+        })
       }
     }
-
-    // ─── תנועות וירטואליות מעסקאות תשלומים ───
-    const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
-
-    for (const t of installments) {
-      const paid = t.installments_paid || 0
-      const remaining = t.num_installments - paid
-      const startDate = t.first_charge_date ? parseLocalDate(t.first_charge_date) : today
-
-      for (let i = 0; i < remaining; i++) {
-        const date = addMonthsClamped(startDate, paid + i)
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-        const monthStr = dateStr.slice(0, 7)
-
-        const covered = db.prepare(`
-          SELECT id FROM Transactions
-          WHERE recurring_id=? AND substr(COALESCE(value_date, transaction_date),1,7)=?
-        `).get(t.id, monthStr)
-        
-        if (!covered) {
-          virtual.push({
-            id: `virtual_installment_${t.id}_${i}`,
-            transaction_date: dateStr,
-            amount: t.amount,
-            transaction_type: 'Expense',
-            business_entity: t.name,
-            category_id: t.category_id,
-            category_name: null,
-            account_id: t.account_id,
-            recurring_id: t.id,
-            is_virtual: true,
-            is_budgetary: t.is_budgetary,
-            description: `תשלום ${paid + i + 1} מתוך ${t.num_installments}`,
-            virtual_source: 'installment',
-          })
-        }
-      }
-    }
-  } catch(e) {}
-
+  }
   return virtual
 }
-
 function Transactions({ viewScope, setViewScope }) {
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
@@ -272,27 +233,29 @@ function Transactions({ viewScope, setViewScope }) {
       v.account_name = acc?.name ?? '—'
     })
 
-    // התרעה זהירה על חיוב אשראי דומה: אותו עסק ואותו סכום בתוך שלושה ימים.
-    // זו אינדיקציה לבדיקה בלבד, לא קביעה שמדובר בהונאה או בכפילות ודאית.
-    const suspicious = db.prepare(`
-      SELECT other.id
-      FROM Transactions current
-      JOIN Accounts account ON account.id=current.account_id
-      JOIN Transactions other ON other.account_id=current.account_id
-        AND other.id<>current.id
-        AND other.transaction_type='Expense'
-        AND lower(trim(COALESCE(other.business_entity,'')))=lower(trim(COALESCE(current.business_entity,'')))
-        AND ABS(other.amount-current.amount)<0.01
-        AND ABS(julianday(other.transaction_date)-julianday(current.transaction_date))<=3
-      WHERE current.id=? AND account.type='Credit_Card'
-        AND current.transaction_type='Expense'
-        AND trim(COALESCE(current.business_entity,''))<>''
-      LIMIT 1
-    `)
+    // One batched duplicate-risk query instead of one query per transaction.
+    const suspiciousIds = new Set()
+    const creditIds = txs.filter(t => t.account_type === 'Credit_Card' && t.transaction_type === 'Expense' && (t.business_entity || '').trim()).map(t => t.id)
+    for (let offset = 0; offset < creditIds.length; offset += 400) {
+      const batch = creditIds.slice(offset, offset + 400)
+      if (!batch.length) continue
+      const placeholders = batch.map(() => '?').join(',')
+      const matches = db.prepare(`
+        SELECT DISTINCT current.id
+        FROM Transactions current
+        JOIN Transactions other ON other.account_id=current.account_id
+          AND other.id<>current.id
+          AND other.transaction_type='Expense'
+          AND lower(trim(COALESCE(other.business_entity,'')))=lower(trim(COALESCE(current.business_entity,'')))
+          AND ABS(other.amount-current.amount)<0.01
+          AND ABS(julianday(other.transaction_date)-julianday(current.transaction_date))<=3
+        WHERE current.id IN (${placeholders})
+          AND trim(COALESCE(current.business_entity,''))<>''
+      `).all(...batch)
+      matches.forEach(row => suspiciousIds.add(row.id))
+    }
     txs.forEach(tx => {
-      if (tx.account_type === 'Credit_Card' && suspicious.get(tx.id)) {
-        tx.suspicious_reason = 'נמצא חיוב באותו עסק ובאותו סכום בטווח של שלושה ימים'
-      }
+      if (suspiciousIds.has(tx.id)) tx.suspicious_reason = 'נמצא חיוב באותו עסק ובאותו סכום בטווח של שלושה ימים'
     })
 
     setTransactions([...txs, ...virtual])
