@@ -348,7 +348,7 @@ function AmortizationPanel({ loan }) {
   const currentIdx = getCurrentMonthIndex(loan)
   // טען תנועות מקושרות
   const linkedTxs = db.prepare(`
-    SELECT * FROM Transactions WHERE liability_id=? ORDER BY transaction_date
+    SELECT * FROM Transactions WHERE liability_id=? AND transaction_type='Expense' ORDER BY transaction_date
   `).all(loan.id)
   const remaining = schedule.slice(currentIdx)
   const futureInterest = remaining.reduce((s, r) => s + r.interest_payment, 0)
