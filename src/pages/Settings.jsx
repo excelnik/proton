@@ -294,6 +294,12 @@ function Settings() {
       ),
 
       showRules && React.createElement('div', null,
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 10 } },
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => setEditRule({
+            id: null, original_string: '', cleaned_name: '', category_id: null, account_id: null,
+            min_amount: null, max_amount: null, valid_from: null, valid_to: null, enabled: 1,
+          }) }, '+ כלל סיווג חדש'),
+        ),
         rules.length === 0
           ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'אין חוקים עדיין')
           : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
@@ -475,6 +481,7 @@ function Settings() {
 function EditRuleModal({ rule, onClose, onSave }) {
   const categories = db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY sort_order').all()
   const accounts = db.prepare('SELECT id, name FROM Accounts WHERE is_active=1 ORDER BY name').all()
+  const [originalString, setOriginalString] = useState(rule.original_string || '')
   const [categoryId, setCategoryId] = useState(rule.category_id?.toString() ?? '')
   const [cleanedName, setCleanedName] = useState(rule.cleaned_name || rule.original_string)
   const [accountId, setAccountId] = useState(rule.account_id?.toString() ?? '')
@@ -492,30 +499,50 @@ function EditRuleModal({ rule, onClose, onSave }) {
     if (min != null && max != null && min > max) { alert('סכום מינימום לא יכול להיות גבוה מסכום מקסימום'); return }
     if (validFrom && validTo && validFrom > validTo) { alert('תאריך התחלה לא יכול להיות אחרי תאריך הסיום'); return }
 
-    db.prepare(`
-      UPDATE Automation_Rules
-      SET category_id=?, cleaned_name=?, account_id=?, min_amount=?, max_amount=?,
-          valid_from=?, valid_to=?, enabled=?
-      WHERE id=?
-    `).run(
-      categoryId || null, cleanedName.trim(), accountId || null, min, max,
-      validFrom || null, validTo || null, enabled ? 1 : 0, rule.id
-    )
+    if (!rule.id && !originalString.trim()) { alert('נא להזין שם עסק או טקסט לזיהוי'); return }
+    if (!cleanedName.trim()) { alert('נא להזין שם תצוגה'); return }
+    if (rule.id) {
+      db.prepare(`
+        UPDATE Automation_Rules
+        SET category_id=?, cleaned_name=?, account_id=?, min_amount=?, max_amount=?,
+            valid_from=?, valid_to=?, enabled=?
+        WHERE id=?
+      `).run(
+        categoryId || null, cleanedName.trim(), accountId || null, min, max,
+        validFrom || null, validTo || null, enabled ? 1 : 0, rule.id
+      )
+    } else {
+      db.prepare(`
+        INSERT INTO Automation_Rules
+          (original_string, cleaned_name, category_id, match_type, priority, use_count,
+           account_id, min_amount, max_amount, valid_from, valid_to, enabled)
+        VALUES (?, ?, ?, 'contains', 0, 0, ?, ?, ?, ?, ?, ?)
+      `).run(
+        originalString.trim().toLowerCase(), cleanedName.trim(), categoryId || null,
+        accountId || null, min, max, validFrom || null, validTo || null, enabled ? 1 : 0
+      )
+    }
     onSave()
   }
 
   return React.createElement('div', { style: styles.overlay },
     React.createElement('div', { style: { ...styles.modal, maxWidth: 480 } },
       React.createElement('div', { style: styles.modalHeader },
-        React.createElement('h2', { style: styles.modalTitle }, 'עריכת חוק זיהוי'),
+        React.createElement('h2', { style: styles.modalTitle }, rule.id ? 'עריכת חוק זיהוי' : 'יצירת חוק סיווג'),
         React.createElement('button', { style: styles.closeBtn, onClick: onClose }, '✕'),
       ),
       React.createElement('div', { style: { ...styles.modalBody, maxHeight: '70vh', overflowY: 'auto' } },
-        React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8 } },
-          `שם מקורי: ${rule.original_string}`
-        ),
+        !rule.id
+          ? Field('טקסט לזיהוי (שם עסק / תיאור)', React.createElement('input', {
+              style: styles.input, value: originalString, onChange: e => setOriginalString(e.target.value),
+              placeholder: 'לדוגמה: חברת החשמל'
+            }))
+          : React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8 } },
+              `שם מקורי: ${rule.original_string}`
+            ),
         Field('שם נקי (כפי שיוצג)', React.createElement('input', {
-          style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value)
+          style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value),
+          placeholder: 'שם שיוצג במערכת'
         })),
         Field('קטגוריה', React.createElement('select', {
           style: styles.input, value: categoryId, onChange: e => setCategoryId(e.target.value)
