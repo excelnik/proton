@@ -700,59 +700,77 @@ const styles = {
 }
 
 function LinkModal({ loan, onClose, onSave }) {
-  // התשלום החודשי האמיתי לתקופה הנוכחית (כולל ריבית/גרייס אם רלוונטי) — לא ממוצע נאיבי
   const schedule = generateAmortization(loan)
   const currentIdx = getCurrentMonthIndex(loan)
   const monthlyPayment = schedule[currentIdx]?.monthly_payment ?? (loan.total_amount / (loan.duration_months || 1))
-  const minAmount = monthlyPayment * 0.85
-  const maxAmount = monthlyPayment * 1.15
+  const [linkType, setLinkType] = useState('repayment')
+  const [candidatesList, setCandidates] = useState([])
+  const [loading, setLoading] = useState(false)
+  const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL')
 
-  const candidates = db.prepare(`
-    SELECT t.*, a.name as account_name FROM Transactions t
-    LEFT JOIN Accounts a ON t.account_id=a.id
-    WHERE t.transaction_type='Expense'
-    AND t.account_id=?
-    AND t.liability_id IS NULL
-    AND (t.source IS NULL OR t.source != 'virtual')
-    AND t.amount BETWEEN ? AND ?
-    ORDER BY t.transaction_date DESC
-    LIMIT 50
-  `).all(loan.account_id, minAmount, maxAmount)
+  function loadCandidates(type) {
+    setLoading(true)
+    const expected = type === 'origin' ? Number(loan.total_amount) : Number(monthlyPayment)
+    const minAmount = expected * 0.85
+    const maxAmount = expected * 1.15
+    const types = type === 'origin' ? ['Income', 'Transfer'] : ['Expense']
+    const placeholders = types.map(() => '?').join(',')
+    const rows = db.prepare(`
+      SELECT t.*, a.name as account_name FROM Transactions t
+      LEFT JOIN Accounts a ON t.account_id=a.id
+      WHERE t.transaction_type IN (${placeholders})
+        AND t.account_id=? AND t.liability_id IS NULL
+        AND (t.source IS NULL OR t.source != 'virtual')
+        AND t.amount BETWEEN ? AND ?
+      ORDER BY t.transaction_date DESC LIMIT 100
+    `).all(...types, loan.account_id, minAmount, maxAmount)
+    setCandidates(rows)
+    setLoading(false)
+  }
 
-  const [candidatesList, setCandidates] = useState(candidates)
+  useEffect(() => { loadCandidates(linkType) }, [linkType])
 
   function handleLink(txId) {
+    if (!confirm(linkType === 'origin'
+      ? 'לקשר את תנועת קבלת כספי ההלוואה להלוואה זו?'
+      : 'לקשר את תנועת ההחזר להלוואה זו?')) return
     db.prepare('UPDATE Transactions SET liability_id=? WHERE id=?').run(loan.id, txId)
     setCandidates(prev => prev.filter(t => t.id !== txId))
   }
 
-  const fmt = n => '₪' + Math.abs(n).toLocaleString('he-IL')
-
   return React.createElement('div', { style: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 } },
-    React.createElement('div', { style: { backgroundColor: '#fff', borderRadius: 20, width: 500, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' } },
+    React.createElement('div', { style: { backgroundColor: '#fff', borderRadius: 20, width: 540, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' } },
       React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E2E8F0' } },
-        React.createElement('h2', { style: { fontSize: 16, fontWeight: 'bold' } }, `🔗 שייך תנועה ל${loan.name}`),
+        React.createElement('h2', { style: { fontSize: 16, fontWeight: 'bold' } }, `🔗 קישור תנועות — ${loan.name}`),
         React.createElement('button', { style: { background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }, onClick: onClose }, '✕'),
       ),
+      React.createElement('div', { style: { display: 'flex', gap: 8, padding: '12px 16px', borderBottom: '1px solid #E2E8F0' } },
+        React.createElement('button', { style: { ...styles.btnSecondary, backgroundColor: linkType === 'origin' ? '#DBEAFE' : '#F1F5F9' }, onClick: () => setLinkType('origin') }, 'תנועת קבלת ההלוואה'),
+        React.createElement('button', { style: { ...styles.btnSecondary, backgroundColor: linkType === 'repayment' ? '#DBEAFE' : '#F1F5F9' }, onClick: () => setLinkType('repayment') }, 'החזרים חודשיים'),
+      ),
       React.createElement('div', { style: { overflowY: 'auto', flex: 1, padding: 16 } },
-        candidatesList.length === 0
-          ? React.createElement('p', { style: { color: '#94A3B8', textAlign: 'center', padding: 32 } }, 'אין תנועות לשיוך')
-          : candidatesList.map(tx =>
-              React.createElement('div', {
+        React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 10 } },
+          linkType === 'origin'
+            ? `מחפש הכנסה או העברה בחשבון "${loan.account_id}" בסכום הקרוב לקרן המקורית ${fmt(loan.total_amount)}.`
+            : `מחפש הוצאות בחשבון המקושר בסכום הקרוב להחזר החודשי ${fmt(monthlyPayment)}.`
+        ),
+        loading ? React.createElement('p', { style: { padding: 24, textAlign: 'center', color: '#64748B' } }, 'טוען תנועות...')
+          : candidatesList.length === 0
+            ? React.createElement('p', { style: { color: '#94A3B8', textAlign: 'center', padding: 32 } }, 'לא נמצאו תנועות מתאימות. ניתן לקשר תנועה גם דרך עריכת התנועה במסך התנועות.')
+            : candidatesList.map(tx => React.createElement('div', {
                 key: tx.id,
                 style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 10, marginBottom: 6, border: '1px solid #E2E8F0', cursor: 'pointer', backgroundColor: '#F8FAFC' },
                 onClick: () => handleLink(tx.id),
               },
                 React.createElement('div', null,
-                  React.createElement('p', { style: { fontSize: 13, fontWeight: '600' } }, tx.business_entity || '—'),
-                  React.createElement('p', { style: { fontSize: 11, color: '#94A3B8' } }, tx.transaction_date),
+                  React.createElement('p', { style: { fontSize: 13, fontWeight: '600' } }, tx.business_entity || tx.description || '—'),
+                  React.createElement('p', { style: { fontSize: 11, color: '#94A3B8' } }, `${tx.transaction_date} · ${tx.account_name || ''} · ${tx.transaction_type}`),
                 ),
-                React.createElement('span', { style: { fontWeight: 'bold', color: '#E11D48' } }, fmt(tx.amount)),
-              )
-            )
+                React.createElement('span', { style: { fontWeight: 'bold', color: tx.transaction_type === 'Income' ? '#10B981' : '#E11D48' } }, fmt(tx.amount)),
+              ))
       ),
       React.createElement('div', { style: { padding: '12px 24px', borderTop: '1px solid #E2E8F0' } },
-        React.createElement('button', { style: { backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', borderRadius: 10, padding: '8px 16px', cursor: 'pointer', fontSize: 13 }, onClick: onSave }, 'סגור ושמור'),
+        React.createElement('button', { style: styles.btnSecondary, onClick: onSave }, 'סגור'),
       ),
     )
   )
