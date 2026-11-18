@@ -100,6 +100,7 @@ function Transactions({ viewScope, setViewScope }) {
   const [filterPanel, setFilterPanel] = useState(false)
   const [filters, setFilters] = useState({ type: '', categoryId: '', accountId: '', amountMin: '', amountMax: '', dateFrom: '', dateTo: '', txId: '', tags: '', linkedType: '' })
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [visibleLimit, setVisibleLimit] = useState(200)
   const [bulkCategoryParentId, setBulkCategoryParentId] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', dir: 'desc' })
 
@@ -351,6 +352,8 @@ function Transactions({ viewScope, setViewScope }) {
       return arr
     }, [visibleTransactions, sortConfig])
 
+    const displayedTransactions = sortedTransactions.slice(0, visibleLimit)
+
   return React.createElement('div', { style: { ...styles.page, position: 'relative', display: 'flex', gap: 0 } },
 
   // ─── פאנל סינון צדדי ───
@@ -600,7 +603,7 @@ function Transactions({ viewScope, setViewScope }) {
               )
             ),
             React.createElement('tbody', null,
-              sortedTransactions.map(tx => {
+              displayedTransactions.map(tx => {
                 const isExpanded = expandedTx === tx.id
                 const isEditing = editingTx === tx.id
                 const isEditingFull = editingFull === tx.id
