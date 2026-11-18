@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { parseImportDate } = require('../src/lib/importDateUtils')
+const { formatImportPreviewCell, parseImportDate } = require('../src/lib/importDateUtils')
 
 test('parses Israeli dotted, slashed, and dashed dates', () => {
   assert.equal(parseImportDate('26.10.2026'), '2026-10-26')
@@ -25,4 +25,13 @@ test('rejects impossible or ambiguous dates instead of silently substituting tod
   assert.equal(parseImportDate('not a date'), '')
   assert.equal(parseImportDate(''), '')
   assert.equal(parseImportDate(null), '')
+})
+
+test('formats imported Date values before rendering preview cells', () => {
+  assert.equal(formatImportPreviewCell(new Date(2026, 9, 26)), '2026-10-26')
+  assert.equal(formatImportPreviewCell(new Date(NaN)), '—')
+  assert.equal(formatImportPreviewCell(null), '—')
+  assert.equal(formatImportPreviewCell(undefined), '—')
+  assert.equal(formatImportPreviewCell(''), '—')
+  assert.equal(formatImportPreviewCell('תיאור'), 'תיאור')
 })

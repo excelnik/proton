@@ -5,9 +5,9 @@ const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
 const { initCrashLogger } = require('../crashLogger')
 const Database = require('better-sqlite3')
-initCrashLogger(path.join(os.homedir(), 'AppData', 'Roaming', 'proton'))
 
-const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
+const DB_PATH = process.env.PROTON_DB_PATH || path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
+initCrashLogger(DB_PATH)
 process.env.PROTON_DB_PATH = DB_PATH
 
 let mainWindow

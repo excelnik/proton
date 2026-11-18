@@ -9,7 +9,7 @@
     "dev": "concurrently \"npm run webpack:watch\" \"wait-on dist/bundle.js && electron .\"",
     "webpack:watch": "webpack --watch",
     "webpack:build": "webpack --mode production",
-    "test": "node --test",
+    "test": "node scripts/run-tests.js",
     "dist": "npm run webpack:build && electron-builder"
   },
   "build": {

@@ -62,4 +62,9 @@ function parseImportDate(value) {
   return ''
 }
 
-module.exports = { parseImportDate }
+function formatImportPreviewCell(value) {
+  if (value instanceof Date) return parseImportDate(value) || '—'
+  return value || '—'
+}
+
+module.exports = { formatImportPreviewCell, parseImportDate }

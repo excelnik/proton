@@ -2,7 +2,7 @@ const React = require('react')
 const { useState, useEffect } = React
 const db = require('../db/index.js')
 const XLSX = require('xlsx')
-const { parseImportDate: parseDate } = require('../lib/importDateUtils.js')
+const { formatImportPreviewCell, parseImportDate: parseDate } = require('../lib/importDateUtils.js')
 const { findScopedMerchantRule } = require('../lib/transactionRules.js')
 const { registerMerchant, approveMerchant } = require('../lib/merchantRegistry.js')
 const { getPopulatedSheetRange } = require('../lib/importSheetUtils.js')
@@ -596,7 +596,7 @@ function Import({ onNavigate }) {
           React.createElement('tbody', null,
             allRows.slice(0, 3).map((row, i) =>
               React.createElement('tr', { key: i },
-                headers.map((_, j) => React.createElement('td', { key: j, style: styles.td }, row[j] || '—'))
+                headers.map((_, j) => React.createElement('td', { key: j, style: styles.td }, formatImportPreviewCell(row[j])))
               )
             )
           )
