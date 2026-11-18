@@ -1069,6 +1069,14 @@ function Transactions({ viewScope, setViewScope }) {
       }, '✕'),
     ),
 
+    sortedTransactions.length > displayedTransactions.length && React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 14 } },
+      React.createElement('span', { style: { fontSize: 12, color: '#64748B' } }, `מוצגות ${displayedTransactions.length} מתוך ${sortedTransactions.length} תנועות`),
+      React.createElement('button', {
+        style: { backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12 },
+        onClick: () => setVisibleLimit(limit => limit + 200),
+      }, 'הצג עוד 200 תנועות'),
+    ),
+
     showModal && React.createElement(AddTransactionModal, {
       categories,
       accounts,
