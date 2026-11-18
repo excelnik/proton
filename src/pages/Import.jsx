@@ -5,6 +5,7 @@ const XLSX = require('xlsx')
 const { parseImportDate: parseDate } = require('../lib/importDateUtils.js')
 const { findScopedMerchantRule } = require('../lib/transactionRules.js')
 const { registerMerchant, approveMerchant } = require('../lib/merchantRegistry.js')
+const { getPopulatedSheetRange } = require('../lib/importSheetUtils.js')
 
 const HEADER_KEYWORDS = [
   'תאריך', 'סכום', 'תיאור', 'זכות', 'חובה', 'פעולה',
@@ -125,6 +126,7 @@ function Import({ onNavigate }) {
   const [mapping, setMapping] = useState(DEFAULT_MAPPING)
   const [reviewRows, setReviewRows] = useState([])
   const [reviewFilter, setReviewFilter] = useState('all')
+  const [reviewPage, setReviewPage] = useState(0)
   const [fileName, setFileName] = useState('')
   const [step3Result, setStep3Result] = useState(null)
   const [activeTab, setActiveTab] = useState('new')
@@ -167,6 +169,10 @@ function Import({ onNavigate }) {
     useEffect(() => { loadImportHistory() }, [])
 
   function processRows(rows, forceHasHeaders) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      alert('לא נמצאו נתונים בגיליון שנבחר.')
+      return
+    }
     const useHeaders = forceHasHeaders !== undefined ? forceHasHeaders : hasHeaders
     let hdrs, dataRows
 
@@ -192,11 +198,20 @@ function Import({ onNavigate }) {
     setFileName(file.name)
     const reader = new FileReader()
     reader.onload = (evt) => {
-      const workbook = XLSX.read(evt.target.result, { type: 'array', cellDates: true })
-      const sheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
-      processRows(rawRows)
+      try {
+        const workbook = XLSX.read(evt.target.result, { type: 'array', cellDates: true })
+        const sheetName = workbook.SheetNames[0]
+        const sheet = sheetName && workbook.Sheets[sheetName]
+        const range = getPopulatedSheetRange(sheet, XLSX.utils)
+        if (!range) throw new Error('לא נמצאו תאים עם נתונים בגיליון הראשון.')
+        const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '', blankrows: false, range })
+        processRows(rawRows)
+      } catch (error) {
+        console.error('Excel import failed:', error)
+        alert(`לא ניתן לקרוא את קובץ Excel: ${error.message || error}`)
+      }
     }
+    reader.onerror = () => alert('קריאת הקובץ נכשלה. נסה לשמור אותו מחדש ולייבא שוב.')
     reader.readAsArrayBuffer(file)
   }
 
@@ -319,6 +334,7 @@ function Import({ onNavigate }) {
     }
 
     setReviewRows(rows)
+    setReviewPage(0)
     setStep(2)
   }
 
@@ -376,6 +392,9 @@ function Import({ onNavigate }) {
   const fallbackCount=reviewRows.filter(r=>r.usedFallbackDate).length
   const invalidDateCount=reviewRows.filter(r=>r.dateInvalid).length
   const visibleReviewRows=reviewRows.map((row,index)=>({row,index})).filter(({row})=>reviewFilter==='all'||(reviewFilter==='duplicates'&&row.isDuplicate)||(reviewFilter==='new'&&!row.isDuplicate&&!row.dateInvalid)||(reviewFilter==='dateErrors'&&row.dateInvalid))
+  const reviewPageSize = 50
+  const reviewPageCount = Math.ceil(visibleReviewRows.length / reviewPageSize)
+  const pagedReviewRows = visibleReviewRows.slice(reviewPage * reviewPageSize, (reviewPage + 1) * reviewPageSize)
 
   const monthOptions = Array.from({ length: 24 }, (_, i) => {
     const d = new Date()
@@ -688,7 +707,7 @@ function Import({ onNavigate }) {
             }, `יבא הכל (${reviewRows.length})`),
           )
         ),
-        React.createElement('div',{style:{display:'flex',gap:6,padding:'8px 20px',borderBottom:'1px solid #E2E8F0',flexWrap:'wrap'}},[['all','הכול'],['new','חדשות'],['duplicates','כפולות בלבד'],['dateErrors','תאריכים לבדיקה']].map(([value,label])=>React.createElement('button',{key:value,style:{...styles.btnSecondary,...(reviewFilter===value?styles.typeBtnActive:{})},onClick:()=>setReviewFilter(value)},label))),
+        React.createElement('div',{style:{display:'flex',gap:6,padding:'8px 20px',borderBottom:'1px solid #E2E8F0',flexWrap:'wrap'}},[['all','הכול'],['new','חדשות'],['duplicates','כפולות בלבד'],['dateErrors','תאריכים לבדיקה']].map(([value,label])=>React.createElement('button',{key:value,style:{...styles.btnSecondary,...(reviewFilter===value?styles.typeBtnActive:{})},onClick:()=>{setReviewFilter(value);setReviewPage(0)}},label))),
       invalidDateCount>0&&React.createElement('p',{style:{padding:'8px 20px',color:'#DC2626',fontSize:12,margin:0}},`⚠ ${invalidDateCount} תנועות עם תאריך לא תקין לא ייובאו.`),
       fallbackCount > 0 && React.createElement('p', { style: { fontSize: 12, color: '#F59E0B', margin: 0 } },
           `📅 ${fallbackCount} שורות ללא תאריך יקבלו תאריך ברירת מחדל: ${fallbackMonth}-${String(getDefaultDay()).padStart(2, '0')}`
@@ -705,7 +724,7 @@ function Import({ onNavigate }) {
             )
           ),
           React.createElement('tbody', null,
-            visibleReviewRows.map(({row,index:i}) =>
+            pagedReviewRows.map(({row,index:i}) =>
               React.createElement('tr', {
                 key: i,
                 style: { backgroundColor: row.unknownMerchant ? '#FEF2F2' : row.isDuplicate ? '#FFFBEB' : row.usedFallbackDate ? '#EFF6FF' : '#fff', borderBottom: '1px solid #F1F5F9' }
@@ -772,7 +791,15 @@ function Import({ onNavigate }) {
             )
           )
         )
-      )
+      ),
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', borderTop: '1px solid #E2E8F0', fontSize: 12, color: '#64748B' } },
+        React.createElement('span', null, reviewPageCount ? `מציג ${reviewPage * reviewPageSize + 1}–${Math.min((reviewPage + 1) * reviewPageSize, visibleReviewRows.length)} מתוך ${visibleReviewRows.length}` : 'אין שורות להצגה'),
+        React.createElement('div', { style: { display: 'flex', gap: 8 } },
+          React.createElement('button', { style: styles.btnSecondary, disabled: reviewPage <= 0, onClick: () => setReviewPage(p => Math.max(0, p - 1)) }, 'הקודם'),
+          React.createElement('span', { style: { alignSelf: 'center' } }, reviewPageCount ? `עמוד ${reviewPage + 1} מתוך ${reviewPageCount}` : 'עמוד 0'),
+          React.createElement('button', { style: styles.btnSecondary, disabled: reviewPage + 1 >= reviewPageCount, onClick: () => setReviewPage(p => Math.min(reviewPageCount - 1, p + 1)) }, 'הבא'),
+        ),
+      ),
     ),
 
     // ── שלב 4 ──
