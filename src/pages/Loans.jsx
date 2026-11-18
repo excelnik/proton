@@ -350,6 +350,9 @@ function AmortizationPanel({ loan }) {
   const linkedTxs = db.prepare(`
     SELECT * FROM Transactions WHERE liability_id=? AND transaction_type='Expense' ORDER BY transaction_date
   `).all(loan.id)
+  const originTransaction = db.prepare(`
+    SELECT * FROM Transactions WHERE liability_id=? AND transaction_type IN ('Income','Transfer') ORDER BY transaction_date LIMIT 1
+  `).get(loan.id)
   const remaining = schedule.slice(currentIdx)
   const futureInterest = remaining.reduce((s, r) => s + r.interest_payment, 0)
 
@@ -358,6 +361,11 @@ function AmortizationPanel({ loan }) {
     // Header
     React.createElement('div', { style: styles.amortHeader },
       React.createElement('p', { style: { fontWeight: '600', fontSize: 15, color: '#0F172A', marginBottom: 8 } }, loan.name),
+      React.createElement('p', { style: { fontSize: 11, color: originTransaction ? '#15803D' : '#94A3B8', marginBottom: 10 } },
+        originTransaction
+          ? `✓ תנועת קבלת ההלוואה מקושרת: ${originTransaction.transaction_date} · ${fmt(originTransaction.amount)}`
+          : 'תנועת קבלת ההלוואה עדיין לא קושרה — ניתן לקשר דרך 🔗 קישור תנועות'
+      ),
       React.createElement('div', { style: { display: 'flex', gap: 16 } },
         React.createElement('div', { style: styles.amortStat },
           React.createElement('p', { style: styles.amortStatLabel }, 'יתרת קרן'),
