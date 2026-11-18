@@ -375,7 +375,7 @@ function Import({ onNavigate }) {
   const autoCount=reviewRows.filter(r=>r.autoDetected).length
   const fallbackCount=reviewRows.filter(r=>r.usedFallbackDate).length
   const invalidDateCount=reviewRows.filter(r=>r.dateInvalid).length
-  const visibleReviewRows=reviewRows.map((row,index)=>({row,index})).filter(({row})=>reviewFilter==='all'||(reviewFilter==='duplicates'&&row.isDuplicate)||(reviewFilter==='new'&&!row.isDuplicate&&!row.dateInvalid)||(reviewFilter==='dateErrors'&&row.dateInvalid)
+  const visibleReviewRows=reviewRows.map((row,index)=>({row,index})).filter(({row})=>reviewFilter==='all'||(reviewFilter==='duplicates'&&row.isDuplicate)||(reviewFilter==='new'&&!row.isDuplicate&&!row.dateInvalid)||(reviewFilter==='dateErrors'&&row.dateInvalid))
 
   const monthOptions = Array.from({ length: 24 }, (_, i) => {
     const d = new Date()
