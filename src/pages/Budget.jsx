@@ -104,13 +104,16 @@ function Budget({ selectedMonth, setSelectedMonth }) {
       ...template, monthly_amount: monthlyAmount(template),
     })).filter(template => template.monthly_amount > 0)
 
-    if (!imports.length) {
+    const period = `${selectedMonth}-01`
+    const previousCount = db.prepare('SELECT COUNT(*) AS count FROM Budget_Recurring_Imports WHERE budget_period=?').get(period)?.count || 0
+    if (!imports.length && !previousCount) {
       alert('אין הוראות קבע פעילות עם קטגוריה וסכום שניתן לייבא לתקציב.')
       return
     }
-    if (!confirm(`לייבא ${imports.length} הוראות קבע לתקציב של החודש הנבחר? הסכום החודשי יחושב לפי התדירות; תשלום שנתי יחולק ל-12 ותשלום עונתי יחולק לפי מספר חודשי העונה. ייבוא חוזר יעדכן את רכיב ההוראות הקבועות ולא יוסיף אותו פעמיים.`)) return
-
-    const period = `${selectedMonth}-01`
+    const prompt = imports.length
+      ? `לעדכן בתקציב ${imports.length} הוראות קבע לחודש הנבחר? סכום חודשי יחושב לפי התדירות; תשלום שנתי יחולק ל-12 ותשלום עונתי לפי חודשי העונה. ייבוא חוזר לא יוסיף סכומים פעמיים.`
+      : 'לא נותרו הוראות קבע לייבוא. להסיר מהתקציב את רכיבי ההוראות שיובאו בעבר?'
+    if (!confirm(prompt)) return
     const apply = db.transaction(() => {
       const previous = db.prepare(`
         SELECT category_id, SUM(monthly_amount) AS total
