@@ -644,7 +644,7 @@ function About() {
         ),
         React.createElement('div', null,
           React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 } }, 'פרוטון'),
-          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, 'v0.4.3 Beta 1'),
+          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, 'v0.4.3 Beta 2 Beta 1'),
           React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
         ),
       ),
