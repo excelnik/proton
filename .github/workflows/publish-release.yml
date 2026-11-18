@@ -49,6 +49,7 @@ jobs:
           prerelease: true
           draft: false
           make_latest: false
+          overwrite_files: true
           files: |
             dist-app/Pruton.Setup.exe
             dist-app/latest.yml
