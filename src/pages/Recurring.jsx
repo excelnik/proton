@@ -1,6 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
+const { detectRecurringPatterns } = require('../lib/recurringDetection.js')
 const { addMonthsClamped } = require('../lib/dateUtils.js')
 
 function Recurring() {
@@ -15,6 +16,8 @@ function Recurring() {
   const [deleteTemplate, setDeleteTemplate] = useState(null)
   const [deleteMode, setDeleteMode] = useState('keep')
   const [linkTemplate, setLinkTemplate] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     const handler = e => {
@@ -72,6 +75,58 @@ function Recurring() {
   }
 
   useEffect(() => { loadTemplates() }, [])
+
+  function scanRecurringPatterns() {
+    setScanning(true)
+    try {
+      const rows = db.prepare(`
+        SELECT id, transaction_date, amount, transaction_type, business_entity,
+               account_id, category_id, recurring_id
+        FROM Transactions
+        WHERE transaction_type='Expense'
+          AND recurring_id IS NULL
+          AND transaction_date >= date('now','-15 months')
+          AND TRIM(COALESCE(business_entity,'')) <> ''
+        ORDER BY transaction_date
+      `).all()
+      const activeKeys = new Set(templates.filter(t => t.type === 'recurring' && t.is_active)
+        .map(t => `${t.account_id ?? 'none'}|${String(t.name || '').trim().toLowerCase()}`))
+      const found = detectRecurringPatterns(rows).filter(item =>
+        !activeKeys.has(`${item.account_id ?? 'none'}|${String(item.name || '').trim().toLowerCase()}`)
+      )
+      setSuggestions(found)
+      if (!found.length) alert('לא נמצאו דפוסים חודשיים שעומדים בתנאי הזיהוי (לפחות 5 חודשים).')
+    } catch (error) {
+      alert('שגיאה בסריקת התנועות: ' + error.message)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  function acceptRecurringSuggestion(suggestion) {
+    const amountLabel = '₪' + suggestion.amount.toLocaleString('he-IL')
+    if (!confirm(`ליצור הוראת קבע עבור "${suggestion.name}" לפי ${suggestion.count} תנועות קודמות?\\nסכום חודשי ממוצע: ${amountLabel}${suggestion.is_estimated ? ' (משתנה)' : ''}.\\nהתנועות הקיימות יקושרו להוראה, ותחזיות עתידיות ייווצרו לפי בחירתך בהמשך.`)) return
+    const create = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO Recurring_Templates
+          (name, type, amount, frequency, charge_day, first_charge_date,
+           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated,
+           minimum_commitment, generate_forecast, notes, is_active, installments_paid)
+        VALUES (?, 'recurring', ?, 'monthly', ?, ?, ?, ?, ?, 1, 0, 1, 1, ?, 1, 0)
+      `).run(
+        suggestion.name, suggestion.amount, suggestion.charge_day, suggestion.first_charge_date,
+        suggestion.account_id || null, suggestion.category_id || null, suggestion.is_estimated ? 1 : 0,
+        `נוצרה מהצעת זיהוי אוטומטי על בסיס ${suggestion.count} תנועות. טווח סכומים: ${suggestion.amount_min}–${suggestion.amount_max} ₪.`
+      )
+      const link = db.prepare('UPDATE Transactions SET recurring_id=? WHERE id=? AND recurring_id IS NULL')
+      suggestion.transaction_ids.forEach(id => link.run(result.lastInsertRowid, id))
+    })
+    create()
+    setSuggestions(prev => prev.filter(item => item.key !== suggestion.key))
+    loadTemplates()
+  }
+
+
 
   const recurring = templates.filter(t => t.type === 'recurring')
   const installments = templates.filter(t => t.type === 'installment')
@@ -137,6 +192,26 @@ function Recurring() {
           onClick: () => { setModalType('installment'); setEditTemplate(null); setShowModal(true) },
         }, '+ עסקת תשלומים'),
       ),
+    ),
+
+    tab === 'recurring' && React.createElement('div', { style: { backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 14, marginBottom: 14 } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } },
+        React.createElement('div', null,
+          React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#0F172A' } }, 'זיהוי הוראות קבע מתוך תנועות קיימות'),
+          React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, 'המערכת מחפשת לפחות 5 חיובים בחודשים שונים, באותו עסק ובחשבון אחד. יצירה וקישור יתבצעו רק לאחר אישורך.'),
+        ),
+        React.createElement('button', { style: styles.btnSecondary, disabled: scanning, onClick: scanRecurringPatterns }, scanning ? 'סורק...' : 'סרוק תנועות'),
+      ),
+      suggestions.length > 0 && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 } },
+        suggestions.map(item => React.createElement('div', { key: item.key, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: 10, border: '1px solid #E2E8F0', borderRadius: 8, backgroundColor: '#fff' } },
+          React.createElement('div', { style: { minWidth: 0 } },
+            React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#0F172A' } }, item.name),
+            React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, `${item.count} חיובים · ${item.first_charge_date} עד ${item.last_charge_date} · ${item.is_estimated ? 'סכום משתנה, ממוצע' : 'סכום קבוע'}`),
+            React.createElement('p', { style: { fontSize: 12, color: '#2563EB' } }, `ממוצע ${fmt(item.amount)} · טווח ${fmt(item.amount_min)}–${fmt(item.amount_max)}`),
+          ),
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => acceptRecurringSuggestion(item) }, 'אשר וצור הו״ק'),
+        ))
+      )
     ),
 
     // כרטיסי סיכום
