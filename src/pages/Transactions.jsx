@@ -22,10 +22,10 @@ function generateVirtualTransactions() {
   const coveredLoans = new Set()
   const coveredRecurring = new Set()
   for (const row of linked) {
-    const month = String(row.tx_date || '').slice(0, 7)
-    if (!/^\d{4}-\d{2}$/.test(month)) continue
-    if (row.liability_id != null) coveredLoans.add(`${row.liability_id}|${month}`)
-    if (row.recurring_id != null) coveredRecurring.add(`${row.recurring_id}|${month}`)
+    const loanMonth = String(row.transaction_date || '').slice(0, 7)
+    const recurringMonth = String(row.value_date || row.transaction_date || '').slice(0, 7)
+    if (row.liability_id != null && /^\d{4}-\d{2}$/.test(loanMonth)) coveredLoans.add(\`\${row.liability_id}|\${loanMonth}\`)
+    if (row.recurring_id != null && /^\d{4}-\d{2}$/.test(recurringMonth)) coveredRecurring.add(\`\${row.recurring_id}|\${recurringMonth}\`)
   }
 
   for (const loan of loans) {
