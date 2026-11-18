@@ -220,7 +220,7 @@ function Import({ onNavigate }) {
     const noDateCount = { count: 0 }
     const parsedDates = allRows.map(row => mapping.date_col !== '' ? parseDate(row[mapping.date_col]) : '').filter(Boolean).sort()
     const minDate = parsedDates[0] || fallbackDate, maxDate = parsedDates[parsedDates.length - 1] || fallbackDate
-    const existing = db.prepare("SELECT id,account_id,amount,business_entity,transaction_date,description,reference FROM Transactions WHERE transaction_date BETWEEN date(?,'-1 day') AND date(?,'+1 day')").all(minDate,maxDate)
+    const existing = db.prepare("SELECT id,account_id,amount,transaction_type,business_entity,transaction_date,description,reference FROM Transactions WHERE transaction_date BETWEEN date(?,'-1 day') AND date(?,'+1 day')").all(minDate,maxDate)
     const existingMap = new Map()
     for (const tx of existing) { const k=`${tx.account_id}|${Number(tx.amount)}|${String(tx.business_entity||'').trim().toLowerCase()}`; if(!existingMap.has(k)) existingMap.set(k,[]); existingMap.get(k).push(tx) }
     const ruleRows = db.prepare("SELECT r.*,c.name as category_name FROM Automation_Rules r LEFT JOIN Categories c ON r.category_id=c.id WHERE r.match_type NOT IN ('mapping','setting') AND r.category_id IS NOT NULL AND COALESCE(r.enabled,1)=1").all()
@@ -229,12 +229,15 @@ function Import({ onNavigate }) {
     const rows = allRows.map(row => {
       const rawDateValue = mapping.date_col !== '' ? row[mapping.date_col] : ''
       const rawDateText = String(rawDateValue ?? '').trim(), parsedDate = parseDate(rawDateValue)
-      const dateInvalid = !!rawDateText && !parsedDate
+      let dateInvalid = !!rawDateText && !parsedDate
       let rawDate = parsedDate
       if (!rawDate && !dateInvalid) { rawDate = fallbackDate; noDateCount.count++ }
       const rawBusiness = String(row[mapping.business_col] ?? '').trim()
       const valueDateValue = mapping.value_date_col !== '' ? row[mapping.value_date_col] : ''
-      const valueDate = (mapping.value_date_col !== '' ? parseDate(valueDateValue) : rawDate) || rawDate
+      const valueDateText = String(valueDateValue ?? '').trim()
+      const parsedValueDate = mapping.value_date_col !== '' ? parseDate(valueDateValue) : rawDate
+      if (valueDateText && !parsedValueDate) dateInvalid = true
+      const valueDate = parsedValueDate || rawDate
       const details = mapping.details_col !== '' ? String(row[mapping.details_col] ?? '').trim() : ''
       const reference = mapping.reference_col !== '' ? String(row[mapping.reference_col] ?? '').trim() : ''
       const accountName = mapping.account_col !== ''
@@ -272,7 +275,7 @@ function Import({ onNavigate }) {
         const key=`${accountId}|${Number(amount)}|${rawBusiness.toLowerCase()}`
         duplicateMatch=(existingMap.get(key)||[]).find(tx=>{
           const days=Math.abs((new Date(`${tx.transaction_date}T00:00:00`).getTime()-new Date(`${rawDate}T00:00:00`).getTime())/86400000)
-          if(days>1)return false
+          if(days>1 || tx.transaction_type !== txType)return false
           return reference ? String(tx.reference||'').trim()===reference : String(tx.description||'').trim()===details
         })||null
         isDuplicate=!!duplicateMatch
