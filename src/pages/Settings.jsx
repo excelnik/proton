@@ -175,16 +175,16 @@ function Settings() {
 
         if (result.success) {
           const backupNotice = result.backupPath
-            ? '\\n\\nהנתונים הישנים נשמרו כאן:\\n' + result.backupPath
+            ? '\n\nהנתונים הישנים נשמרו כאן:\n' + result.backupPath
             : ''
           alert('ההתחלה מחדש הוכנה בהצלחה. בהפעלה הבאה ייווצר מסד נתונים ריק.' + backupNotice)
           setTimeout(() => ipcRenderer.send('quit-app'), 1000)
         } else {
-          setDeleteMessage('הפעולה נכשלה: ' + result.error + '\\n\\nמסד הנתונים נסגר. סגור את פרוטון והפעל אותו מחדש לפני ניסיון נוסף.')
+          setDeleteMessage('הפעולה נכשלה: ' + result.error + '\n\nמסד הנתונים נסגר. סגור את פרוטון והפעל אותו מחדש לפני ניסיון נוסף.')
           setDeleteStep(3)
         }
       } catch (e) {
-        setDeleteMessage('שגיאה: ' + e.message + '\\n\\nסגור את פרוטון והפעל אותו מחדש.')
+        setDeleteMessage('שגיאה: ' + e.message + '\n\nסגור את פרוטון והפעל אותו מחדש.')
         setDeleteStep(3)
       }
     }
