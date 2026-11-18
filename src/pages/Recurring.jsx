@@ -2,6 +2,7 @@ const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
 const { detectRecurringPatterns } = require('../lib/recurringDetection.js')
+const { normalizeMerchantName } = require('../lib/transactionRules.js')
 const { addMonthsClamped } = require('../lib/dateUtils.js')
 
 function Recurring() {
@@ -90,9 +91,9 @@ function Recurring() {
         ORDER BY transaction_date
       `).all()
       const activeKeys = new Set(templates.filter(t => t.type === 'recurring' && t.is_active)
-        .map(t => `${t.account_id ?? 'none'}|${String(t.name || '').trim().toLowerCase()}`))
+         .map(t => `${t.account_id ?? 'none'}|${normalizeMerchantName(t.name)}`))
       const found = detectRecurringPatterns(rows).filter(item =>
-        !activeKeys.has(`${item.account_id ?? 'none'}|${String(item.name || '').trim().toLowerCase()}`)
+        !activeKeys.has(`${item.account_id ?? 'none'}|${normalizeMerchantName(item.name)}`)
       )
       setSuggestions(found)
       if (!found.length) alert('לא נמצאו דפוסים חודשיים שעומדים בתנאי הזיהוי (לפחות 5 חודשים).')
