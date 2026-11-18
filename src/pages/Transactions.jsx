@@ -15,7 +15,7 @@ function generateVirtualTransactions() {
   const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
   // Load all links once; never execute a SQL query inside a generated schedule loop.
   const linked = db.prepare(`
-    SELECT liability_id, recurring_id, transaction_date, value_date
+    SELECT liability_id, recurring_id, transaction_date, value_date, transaction_type
     FROM Transactions
     WHERE liability_id IS NOT NULL OR recurring_id IS NOT NULL
   `).all()
@@ -24,7 +24,7 @@ function generateVirtualTransactions() {
   for (const row of linked) {
     const loanMonth = String(row.transaction_date || '').slice(0, 7)
     const recurringMonth = String(row.value_date || row.transaction_date || '').slice(0, 7)
-    if (row.liability_id != null && /^\d{4}-\d{2}$/.test(loanMonth)) coveredLoans.add(`${row.liability_id}|${loanMonth}`)
+    if (row.liability_id != null && row.transaction_type === 'Expense' && /^\d{4}-\d{2}$/.test(loanMonth)) coveredLoans.add(`${row.liability_id}|${loanMonth}`)
     if (row.recurring_id != null && /^\d{4}-\d{2}$/.test(recurringMonth)) coveredRecurring.add(`${row.recurring_id}|${recurringMonth}`)
   }
 
