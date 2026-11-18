@@ -15,6 +15,7 @@ test('parses ISO dates and timestamps without shifting the calendar day', () => 
 
 test('parses valid Date objects and Excel serial dates', () => {
   assert.equal(parseImportDate(new Date(2026, 9, 26)), '2026-10-26')
+  assert.equal(parseImportDate(46221), '2026-07-18')
   assert.equal(parseImportDate('46221'), '2026-07-18')
 })
 
