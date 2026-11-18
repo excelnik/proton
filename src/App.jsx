@@ -51,16 +51,41 @@ function App() {
       }
     }
 
-    function onClick(event) {
-      const item = {
-        at: new Date().toISOString(),
-        page: window.__prutonCurrentPage || 'unknown',
-        action: 'click',
-        target: describeTarget(event.target),
-      }
+    function recordInteraction(item) {
       diagnostics.lastInteraction = item
       diagnostics.interactions.push(item)
       if (diagnostics.interactions.length > 40) diagnostics.interactions.shift()
+    }
+
+    function onClick(event) {
+      const target = describeTarget(event.target)
+      if (target.label && target.label.includes('דיווח ותיעוד')) return
+      recordInteraction({
+        at: new Date().toISOString(),
+        page: window.__prutonCurrentPage || 'unknown',
+        action: 'click',
+        target,
+      })
+    }
+
+    function onChange(event) {
+      const el = event.target
+      if (!el || !['SELECT', 'INPUT'].includes(el.tagName)) return
+      recordInteraction({
+        at: new Date().toISOString(),
+        page: window.__prutonCurrentPage || 'unknown',
+        action: 'change',
+        target: {
+          tag: el.tagName,
+          id: el.id || null,
+          role: el.getAttribute('role') || null,
+          ariaLabel: el.getAttribute('aria-label') || null,
+          inputType: el.type || el.tagName.toLowerCase(),
+          selectedLabel: el.tagName === 'SELECT' ? (el.options && el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : null) : null,
+          checked: ['checkbox', 'radio'].includes(el.type) ? Boolean(el.checked) : null,
+          valueCaptured: false,
+        },
+      })
     }
 
     function onError(event) {
@@ -88,10 +113,12 @@ function App() {
     }
 
     document.addEventListener('click', onClick, true)
+    document.addEventListener('change', onChange, true)
     window.addEventListener('error', onError)
     window.addEventListener('unhandledrejection', onRejection)
     return () => {
       document.removeEventListener('click', onClick, true)
+      document.removeEventListener('change', onChange, true)
       window.removeEventListener('error', onError)
       window.removeEventListener('unhandledrejection', onRejection)
     }
