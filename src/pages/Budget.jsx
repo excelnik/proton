@@ -1,6 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useCallback } = React
 const db = require('../db/index.js')
+const { recurringMonthlyBudgetAmount, adjustPlanForRecurringImports } = require('../lib/budgetUtils.js')
 const { getDateColumn } = require('../db/index.js')
 
 function Budget({ selectedMonth, setSelectedMonth }) {
@@ -83,22 +84,7 @@ function Budget({ selectedMonth, setSelectedMonth }) {
       WHERE is_active=1 AND type='recurring' AND category_id IS NOT NULL
     `).all()
 
-    const monthlyAmount = template => {
-      if (Number(template.minimum_commitment) === 0) return 0
-      const amount = Math.abs(Number(template.amount) || 0)
-      if (amount <= 0) return 0
-      if (template.frequency === 'monthly') return amount
-      if (template.frequency === 'bimonthly') return amount / 2
-      if (template.frequency === 'quarterly') return amount / 3
-      if (template.frequency === 'annual') return amount / 12
-      if (template.frequency === 'seasonal') {
-        const months = String(template.season_months || '').split(',')
-          .map(value => Number(value.trim()))
-          .filter(value => Number.isInteger(value) && value >= 1 && value <= 12)
-        return amount * new Set(months).size / 12
-      }
-      return 0
-    }
+    const monthlyAmount = recurringMonthlyBudgetAmount
 
     const imports = templates.map(template => ({
       ...template, monthly_amount: monthlyAmount(template),
@@ -134,7 +120,7 @@ function Budget({ selectedMonth, setSelectedMonth }) {
       `)
       for (const categoryId of categoryIds) {
         const planned = Number(readPlan.get(categoryId, period)?.planned_amount) || 0
-        const next = Math.max(0, planned - (oldTotals.get(categoryId) || 0) + (newTotals.get(categoryId) || 0))
+        const next = adjustPlanForRecurringImports(planned, oldTotals.get(categoryId), newTotals.get(categoryId))
         savePlan.run(categoryId, period, next)
       }
 
