@@ -399,15 +399,15 @@ function Settings() {
 
       // איפוס מערכת
       React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
-        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס מערכת'),
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס נתונים פיננסיים'),
         React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-          'מחיקת כל התנועות והנתונים. פעולה בלתי הפיכה!'
+          'מוחק תנועות, חשבונות והתחייבויות. הגדרות וקטגוריות נשמרות. להתחלה נקייה לחלוטין השתמש באפשרות התחלה מחדש למטה.'
         ),
         !showResetConfirm
           ? React.createElement('button', {
               style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
               onClick: () => setShowResetConfirm(true),
-            }, 'איפוס מערכת')
+            }, 'נקה פעילות פיננסית')
           : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
               React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#E11D48', marginBottom: 10 } },
                 resetStep === 1 ? '⚠️ האם אתה בטוח?' : '🚨 אישור אחרון!'
@@ -425,7 +425,7 @@ function Settings() {
             ),
       ),
 
-      // הסרת פרוטון
+      // התחלה מחדש – שומרת את מסד הנתונים הישן בתיקיית גיבוי
       React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
         React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🔄 התחלה מחדש – מסד נתונים חדש'),
         React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
