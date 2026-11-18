@@ -147,77 +147,44 @@ function Settings() {
   // ──── מחיקה בטוחה של נתונים ────
   async function handleDeleteData() {
     if (deleteStep === 0) {
-      // שלב 1: בדוק אם המשתמש רוצה לגבות
-      const shouldBackup = confirm(
-        '⚠️ הסרת פרוטון\n\n' +
-        'מומלץ מאוד לגבות את הנתונים לפני המחיקה!\n\n' +
-        'לחץ OK כדי לגבות, או Cancel כדי להמשיך ללא גיבוי.'
+      const confirmed = confirm(
+        'התחלה מחדש בפרוטון\n\n' +
+        'כל הנתונים הפעילים יועברו אוטומטית לתיקיית גיבוי מתוארכת.\n' +
+        'לאחר מכן פרוטון ייצור מסד נתונים חדש וריק בהפעלה הבאה.\n\n' +
+        'מומלץ להמשיך רק אם ברצונך להתחיל מאפס. להמשיך?'
       )
-      
-      if (shouldBackup) {
-        // גבה את הנתונים
-        try {
-          const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
-          const result = await ipcRenderer.invoke('export-db', dbPath)
-          if (!result.success && !result.cancelled) {
-            alert('⚠️ שגיאה בגיבוי: ' + result.error)
-            return
-          }
-          if (result.cancelled) {
-            alert('⚠️ ביטלת את הגיבוי. להמשך מחיקה?')
-          } else {
-            alert('✓ גיבוי בוצע בהצלחה:\n' + result.path)
-          }
-        } catch (e) {
-          alert('⚠️ שגיאה בגיבוי: ' + e.message)
-          return
-        }
-      }
-
-      // עבור לשלב 2: אישור סופי
+      if (!confirmed) return
       setDeleteStep(1)
-      setDeleteMessage('🚨 אישור אחרון\n\nכל הנתונים יימחקו ופרוטון יסגר.\nפעולה זו לא ניתנת לביטול!')
+      setDeleteMessage('אישור אחרון\n\nמסד הנתונים הנוכחי יועבר בשלמותו לתיקיית גיבוי. פרוטון ייסגר, ובהפעלה הבאה ייווצר מסד נתונים חדש.')
       return
     }
 
     if (deleteStep === 1) {
-      // שלב 2: אישור סופי
-      const confirmed = confirm(deleteMessage)
-      if (!confirmed) {
+      if (!confirm(deleteMessage)) {
         setDeleteStep(0)
         setDeleteMessage('')
         return
       }
 
-      // שלב 3: מחיקה בטוחה
       setDeleteStep(2)
-      setDeleteMessage('🔄 מוחק נתונים...')
-
+      setDeleteMessage('מכין סביבת נתונים חדשה...')
       try {
         const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
-        
-        // סגור את ה-Database
         db.close()
-        
-        // קרא ל-safe-delete-db handler
         const result = await ipcRenderer.invoke('safe-delete-db', dbPath)
-        
-        if (result.success) {
-          setDeleteMessage('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון:\n1. הפעל > appwiz.cpl\n2. חפש "Pruton" ו-Uninstall')
-          alert('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון דרך:\nהגדרות > אפליקציות > הסר אפליקציה')
 
-          // סגור את האפליקציה
-          setTimeout(() => {
-            ipcRenderer.send('quit-app')
-          }, 1000)
+        if (result.success) {
+          const backupNotice = result.backupPath
+            ? '\\n\\nהנתונים הישנים נשמרו כאן:\\n' + result.backupPath
+            : ''
+          alert('ההתחלה מחדש הוכנה בהצלחה. בהפעלה הבאה ייווצר מסד נתונים ריק.' + backupNotice)
+          setTimeout(() => ipcRenderer.send('quit-app'), 1000)
         } else {
-          // חיבור ה-DB כבר נסגר לעיל ולא ניתן לפתוח אותו מחדש בלי להפעיל את פרוטון מחדש —
-          // אסור לתת למשתמש להמשיך להשתמש באפליקציה כאילו כלום לא קרה
-          setDeleteMessage('❌ המחיקה נכשלה: ' + result.error + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+          setDeleteMessage('הפעולה נכשלה: ' + result.error + '\\n\\nמסד הנתונים נסגר. סגור את פרוטון והפעל אותו מחדש לפני ניסיון נוסף.')
           setDeleteStep(3)
         }
       } catch (e) {
-        setDeleteMessage('❌ שגיאה: ' + e.message + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+        setDeleteMessage('שגיאה: ' + e.message + '\\n\\nסגור את פרוטון והפעל אותו מחדש.')
         setDeleteStep(3)
       }
     }
@@ -460,15 +427,15 @@ function Settings() {
 
       // הסרת פרוטון
       React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
-        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🔄 התחלה מחדש – מסד נתונים חדש'),
         React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-          'מחיקה בטוחה של הנתונים עם אפשרות לגיבוי.'
+          'העברת כל הנתונים הישנים לתיקיית גיבוי מתוארכת ויצירת מסד נתונים חדש וריק. התוכנה תיסגר ותופעל מחדש ידנית.'
         ),
         deleteStep === 0
           ? React.createElement('button', {
               style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
               onClick: handleDeleteData,
-            }, '🗑 הסר את פרוטון')
+            }, 'התחל מחדש עם נתונים ריקים')
           : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
               React.createElement('p', { style: { fontSize: 13, color: '#E11D48', marginBottom: 10, fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' } }, deleteMessage),
               deleteStep === 1 && React.createElement('div', { style: { display: 'flex', gap: 6 } },
