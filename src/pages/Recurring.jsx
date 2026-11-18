@@ -106,7 +106,7 @@ function Recurring() {
 
   function acceptRecurringSuggestion(suggestion) {
     const amountLabel = '₪' + suggestion.amount.toLocaleString('he-IL')
-    if (!confirm(`ליצור הוראת קבע עבור "${suggestion.name}" לפי ${suggestion.count} תנועות קודמות?\\nסכום חודשי ממוצע: ${amountLabel}${suggestion.is_estimated ? ' (משתנה)' : ''}.\\nהתנועות הקיימות יקושרו להוראה, ותחזיות עתידיות ייווצרו לפי בחירתך בהמשך.`)) return
+    if (!confirm(`ליצור הוראת קבע עבור "${suggestion.name}" לפי ${suggestion.count} תנועות קודמות?\nסכום חודשי ממוצע: ${amountLabel}${suggestion.is_estimated ? ' (משתנה)' : ''}.\nהתנועות הקיימות יקושרו להוראה, ותחזיות עתידיות ייווצרו לפי בחירתך בהמשך.`)) return
     const create = db.transaction(() => {
       const result = db.prepare(`
         INSERT INTO Recurring_Templates
