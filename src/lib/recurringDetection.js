@@ -12,7 +12,7 @@ function detectRecurringPatterns(rows, options = {}) {
   for (const row of rows || []) {
     if (row.transaction_type !== 'Expense' || row.recurring_id != null || !row.business_entity) continue
     const date = String(row.transaction_date || '')
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) continue
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
     const merchant = normalizeMerchantName(row.business_entity)
     if (!merchant) continue
     const key = `${row.account_id ?? 'none'}|${merchant}`
