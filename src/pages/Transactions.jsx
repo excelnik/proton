@@ -15,7 +15,7 @@ function generateVirtualTransactions() {
   const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
   // Load all links once; never execute a SQL query inside a generated schedule loop.
   const linked = db.prepare(`
-    SELECT liability_id, recurring_id, COALESCE(value_date, transaction_date) AS tx_date
+    SELECT liability_id, recurring_id, transaction_date, value_date
     FROM Transactions
     WHERE liability_id IS NOT NULL OR recurring_id IS NOT NULL
   `).all()
