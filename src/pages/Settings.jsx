@@ -1,4 +1,6 @@
 const React = require('react')
+const APP_VERSION = require('../../package.json').version
+const DISPLAY_VERSION = `v${APP_VERSION.replace('-beta.', ' Beta ')}`
 const { useState, useEffect } = require('react')
 const db = require('../db/index.js')
 const os = require('os')
@@ -645,7 +647,7 @@ function About() {
         ),
         React.createElement('div', null,
           React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 } }, 'פרוטון'),
-          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, 'v0.4.3 Beta 2'),
+          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, DISPLAY_VERSION),
           React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
         ),
       ),
