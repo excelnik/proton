@@ -103,6 +103,7 @@ function Transactions({ viewScope, setViewScope }) {
   const [visibleLimit, setVisibleLimit] = useState(200)
   const [bulkCategoryParentId, setBulkCategoryParentId] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', dir: 'desc' })
+  const deferredSearchText = React.useDeferredValue(searchText)
 
   useEffect(() => {
     const handler = e => {
@@ -325,7 +326,6 @@ function Transactions({ viewScope, setViewScope }) {
       .filter(r => r.label !== 'Invalid Date')
     }, [])
 
-    const deferredSearchText = React.useDeferredValue(searchText)
     const visibleTransactions = React.useMemo(() => transactions.filter(tx => {
       if (deferredSearchText) {
         const q = deferredSearchText.toLowerCase()
