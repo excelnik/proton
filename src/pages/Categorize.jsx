@@ -61,15 +61,16 @@ function Categorize() {
     setSaving(null)
   }
 
+  const deferredSearch = React.useDeferredValue(search)
   const filtered = React.useMemo(() => transactions
     .filter(t => filter === 'all' || !t.category_id || t._justCategorized)
-    .filter(t => !search || (t.business_entity ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (t.description ?? '').toLowerCase().includes(search.toLowerCase())), [transactions, filter, search])
+    .filter(t => !deferredSearch || (t.business_entity ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      (t.description ?? '').toLowerCase().includes(deferredSearch.toLowerCase())), [transactions, filter, deferredSearch])
   const displayed = filtered.slice(0, visibleLimit)
   const uncategorizedCount = React.useMemo(() => transactions.filter(t => !t.category_id).length, [transactions])
   const totalCount = transactions.length
 
-  useEffect(() => { setVisibleLimit(200) }, [filter, search])
+  useEffect(() => { setVisibleLimit(200) }, [filter, deferredSearch])
   const progress = totalCount > 0 ? Math.round(((totalCount - uncategorizedCount) / totalCount) * 100) : 0
   const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL')
   const eligible = tx => categories.filter(c => tx.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
