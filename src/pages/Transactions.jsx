@@ -267,7 +267,7 @@ function Transactions({ viewScope, setViewScope }) {
   }
 
   useEffect(() => { loadData() }, [viewScope])
-  useEffect(() => { setVisibleLimit(200) }, [viewScope, searchText, filters, sortConfig])
+  useEffect(() => { setVisibleLimit(200) }, [viewScope, deferredSearchText, filters, sortConfig])
 
   function handleConfirmVirtual(tx) {
     db.prepare(`
@@ -325,9 +325,10 @@ function Transactions({ viewScope, setViewScope }) {
       .filter(r => r.label !== 'Invalid Date')
     }, [])
 
+    const deferredSearchText = React.useDeferredValue(searchText)
     const visibleTransactions = React.useMemo(() => transactions.filter(tx => {
-      if (searchText) {
-        const q = searchText.toLowerCase()
+      if (deferredSearchText) {
+        const q = deferredSearchText.toLowerCase()
         const inDesc = (tx.description || '').toLowerCase().includes(q)
         const inEntity = (tx.business_entity || '').toLowerCase().includes(q)
         if (!inDesc && !inEntity) return false
@@ -345,7 +346,7 @@ function Transactions({ viewScope, setViewScope }) {
       if (filters.linkedType === 'recurring' && !tx.recurring_id) return false
       if (filters.linkedType === 'insurance' && !tx.insurance_id) return false
       return true
-    }), [transactions, searchText, filters])
+    }), [transactions, deferredSearchText, filters])
 
     const sortedTransactions = React.useMemo(() => {
       const arr = [...visibleTransactions]
