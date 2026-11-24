@@ -224,9 +224,11 @@ function Transactions({ viewScope, setViewScope }) {
 
     // תנועות וירטואליות מוצגות רק בבחירת חודש בודד — הלוואות ל-20 שנה מייצרות מאות
     // תשלומים עתידיים, וב"כל הזמנים" הן היו מציפות את הטבלה בשורות לא רלוונטיות
-    const virtual = generateVirtualTransactions().filter(v =>
-      v.transaction_date.slice(0, 7) === viewScope
-    )
+    // Forecast rows are relevant only for one concrete month. Do not generate
+    // every loan/recurring schedule when viewing all history or a whole year.
+    const virtual = /^\d{4}-\d{2}$/.test(viewScope)
+      ? generateVirtualTransactions().filter(v => v.transaction_date.slice(0, 7) === viewScope)
+      : []
     // הוסף שם חשבון לוירטואליות
     const accounts = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
     virtual.forEach(v => {
@@ -265,6 +267,7 @@ function Transactions({ viewScope, setViewScope }) {
   }
 
   useEffect(() => { loadData() }, [viewScope])
+  useEffect(() => { setVisibleLimit(200) }, [viewScope, searchText, filters, sortConfig])
 
   function handleConfirmVirtual(tx) {
     db.prepare(`
@@ -297,8 +300,14 @@ function Transactions({ viewScope, setViewScope }) {
   }
 
   const fmt = n => '₪' + n.toLocaleString('he-IL')
-  const income  = transactions.filter(t => t.transaction_type === 'Income').reduce((s, t) => s + t.amount, 0)
-  const expense = transactions.filter(t => t.transaction_type === 'Expense').reduce((s, t) => s + t.amount, 0)
+  const income = React.useMemo(
+    () => transactions.reduce((sum, tx) => sum + (tx.transaction_type === 'Income' ? tx.amount : 0), 0),
+    [transactions]
+  )
+  const expense = React.useMemo(
+    () => transactions.reduce((sum, tx) => sum + (tx.transaction_type === 'Expense' ? tx.amount : 0), 0),
+    [transactions]
+  )
 
   const months = React.useMemo(() => {
     const dateCol = getDateColumn()
@@ -316,7 +325,7 @@ function Transactions({ viewScope, setViewScope }) {
       .filter(r => r.label !== 'Invalid Date')
     }, [])
 
-    const visibleTransactions = transactions.filter(tx => {
+    const visibleTransactions = React.useMemo(() => transactions.filter(tx => {
       if (searchText) {
         const q = searchText.toLowerCase()
         const inDesc = (tx.description || '').toLowerCase().includes(q)
@@ -336,7 +345,7 @@ function Transactions({ viewScope, setViewScope }) {
       if (filters.linkedType === 'recurring' && !tx.recurring_id) return false
       if (filters.linkedType === 'insurance' && !tx.insurance_id) return false
       return true
-    })
+    }), [transactions, searchText, filters])
 
     const sortedTransactions = React.useMemo(() => {
       const arr = [...visibleTransactions]
@@ -997,7 +1006,7 @@ function Transactions({ viewScope, setViewScope }) {
           const type = e.target.value
           if (!confirm(`לשנות ${selectedIds.size} תנועות ל${type === 'Income' ? 'הכנסה' : 'הוצאה'}?`)) return
           const stmt = db.prepare('UPDATE Transactions SET transaction_type=? WHERE id=?')
-          selectedIds.forEach(id => stmt.run(type, id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(type, id)))()
           setSelectedIds(new Set())
           loadData()
         }
@@ -1019,7 +1028,7 @@ function Transactions({ viewScope, setViewScope }) {
           const catName = categories.find(c => String(c.id) === catId)?.name || ''
           if (!confirm(`לשנות קטגוריה של ${selectedIds.size} תנועות ל"${catName}"?`)) return
           const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
-          selectedIds.forEach(id => stmt.run(catId, id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(catId, id)))()
           setBulkCategoryParentId(catId)
           loadData()
         }
@@ -1037,7 +1046,7 @@ function Transactions({ viewScope, setViewScope }) {
           const subName = db.prepare('SELECT name FROM Categories WHERE id=?').get(subId)?.name || ''
           if (!confirm(`לשנות תת־קטגוריה של ${selectedIds.size} תנועות ל״${subName}״?`)) return
           const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
-          selectedIds.forEach(id => stmt.run(subId, id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(subId, id)))()
           setSelectedIds(new Set())
           setBulkCategoryParentId('')
           loadData()
@@ -1056,7 +1065,7 @@ function Transactions({ viewScope, setViewScope }) {
         onClick: () => {
           if (!confirm(`למחוק ${selectedIds.size} תנועות לצמיתות?`)) return
           const stmt = db.prepare('DELETE FROM Transactions WHERE id=?')
-          selectedIds.forEach(id => stmt.run(id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(id)))()
           setSelectedIds(new Set())
           loadData()
         }

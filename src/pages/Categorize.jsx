@@ -11,6 +11,7 @@ function Categorize() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [bulkParentId, setBulkParentId] = useState('')
   const [bulkCategoryId, setBulkCategoryId] = useState('')
+  const [visibleLimit, setVisibleLimit] = useState(200)
 
   function loadData() {
     const txs = db.prepare(`
@@ -30,39 +31,45 @@ function Categorize() {
 
   function handleCategorize(txId, categoryId, businessEntity) {
     setSaving(txId)
-    db.prepare('UPDATE Transactions SET category_id = ? WHERE id = ?').run(categoryId || null, txId)
-    if (businessEntity && categoryId) {
-      const merchantKey = businessEntity.trim().toLowerCase()
-      const existing = db.prepare(
-        "SELECT id, category_id FROM Automation_Rules WHERE original_string = ? AND match_type NOT IN ('mapping', 'setting') ORDER BY priority DESC, id DESC"
-      ).get(merchantKey)
-      const selectedCategory = categories.find(c => c.id === Number(categoryId))
-      const categoryLabel = selectedCategory?.name || 'הקטגוריה שנבחרה'
-      const prompt = existing
-        ? `קיים כלל סיווג אוטומטי עבור "${businessEntity}". האם לעדכן אותו ל"${categoryLabel}" עבור תנועות עתידיות?`
-        : `האם לשמור כלל סיווג אוטומטי עבור "${businessEntity}" לקטגוריה "${categoryLabel}" בתנועות עתידיות?`
-      if (confirm(prompt)) {
+    const save = db.transaction(() => {
+      db.prepare('UPDATE Transactions SET category_id = ? WHERE id = ?').run(categoryId || null, txId)
+
+      // למידה אוטומטית כמו בגרסה המקורית: כל סיווג ידני מלמד כלל להמשך.
+      if (businessEntity && categoryId) {
+        const merchantKey = businessEntity.trim().toLowerCase()
+        const existing = db.prepare(
+          "SELECT id FROM Automation_Rules WHERE original_string = ? AND match_type NOT IN ('mapping', 'setting') ORDER BY priority DESC, id DESC"
+        ).get(merchantKey)
+
         if (!existing) {
           db.prepare(`
             INSERT INTO Automation_Rules (original_string, cleaned_name, category_id, match_type, priority, use_count)
             VALUES (?, ?, ?, 'contains', 0, 1)
-          `).run(merchantKey, businessEntity.trim(), categoryId)
+          `).run(merchantKey, businessEntity.trim(), Number(categoryId))
         } else {
           db.prepare('UPDATE Automation_Rules SET category_id = ?, use_count = use_count + 1 WHERE id = ?')
-            .run(categoryId, existing.id)
+            .run(Number(categoryId), existing.id)
         }
       }
-    }
-    setTransactions(prev => prev.map(t => t.id === txId ? { ...t, category_id: categoryId } : t))
+    })
+    save()
+
+    // השאר את התנועה מוצגת לאחר הסיווג, כפי שהיה במקור.
+    setTransactions(prev => prev.map(t =>
+      t.id === txId ? { ...t, category_id: categoryId, _justCategorized: Boolean(categoryId) } : t
+    ))
     setSaving(null)
   }
 
-  const filtered = transactions
-    .filter(t => filter === 'all' || !t.category_id)
+  const filtered = React.useMemo(() => transactions
+    .filter(t => filter === 'all' || !t.category_id || t._justCategorized)
     .filter(t => !search || (t.business_entity ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (t.description ?? '').toLowerCase().includes(search.toLowerCase()))
-  const uncategorizedCount = transactions.filter(t => !t.category_id).length
+      (t.description ?? '').toLowerCase().includes(search.toLowerCase())), [transactions, filter, search])
+  const displayed = filtered.slice(0, visibleLimit)
+  const uncategorizedCount = React.useMemo(() => transactions.filter(t => !t.category_id).length, [transactions])
   const totalCount = transactions.length
+
+  useEffect(() => { setVisibleLimit(200) }, [filter, search])
   const progress = totalCount > 0 ? Math.round(((totalCount - uncategorizedCount) / totalCount) * 100) : 0
   const fmt = n => '₪' + Number(n || 0).toLocaleString('he-IL')
   const eligible = tx => categories.filter(c => tx.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
@@ -150,7 +157,7 @@ function Categorize() {
               )
             ),
             React.createElement('tbody', null,
-              filtered.map(tx => React.createElement('tr', { key: tx.id, style: { ...styles.tr, backgroundColor: selectedIds.has(tx.id) ? '#EFF6FF' : !tx.category_id ? '#FFFBEB' : '#fff' } },
+              displayed.map(tx => React.createElement('tr', { key: tx.id, style: { ...styles.tr, backgroundColor: selectedIds.has(tx.id) ? '#EFF6FF' : !tx.category_id ? '#FFFBEB' : '#fff' } },
                 React.createElement('td', { style: styles.td },
                   React.createElement('input', { type: 'checkbox', checked: selectedIds.has(tx.id), onChange: e => {
                     const next = new Set(selectedIds); if (e.target.checked) next.add(tx.id); else next.delete(tx.id); setSelectedIds(next)
@@ -176,6 +183,15 @@ function Categorize() {
             )
           )
         )
+    ),
+    filtered.length > displayed.length && React.createElement('div', {
+      style: { display: 'flex', justifyContent: 'center', padding: 14 }
+    },
+      React.createElement('button', {
+        style: styles.applyBtn,
+        onClick: () => setVisibleLimit(limit => limit + 200),
+      }, `הצג עוד 200 תנועות (${displayed.length} מתוך ${filtered.length})`)
+    )
   )
 }
 

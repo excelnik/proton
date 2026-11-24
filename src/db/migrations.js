@@ -62,6 +62,24 @@ function runMigrations(db) {
       CREATE INDEX IF NOT EXISTS idx_budget_recurring_imports_period
         ON Budget_Recurring_Imports(budget_period, category_id);
     `)
+    // Indexes for the transaction views and duplicate-risk lookup.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_transactions_date_id
+        ON Transactions(transaction_date DESC, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_transactions_value_date
+        ON Transactions(value_date, id);
+      CREATE INDEX IF NOT EXISTS idx_transactions_account_type_date_amount
+        ON Transactions(account_id, transaction_type, transaction_date, amount);
+      CREATE INDEX IF NOT EXISTS idx_transactions_liability_date
+        ON Transactions(liability_id, transaction_date);
+      CREATE INDEX IF NOT EXISTS idx_transactions_recurring_date
+        ON Transactions(recurring_id, transaction_date);
+      CREATE INDEX IF NOT EXISTS idx_transactions_duplicate_lookup
+        ON Transactions(account_id, transaction_type, lower(trim(COALESCE(business_entity,''))), amount, transaction_date);
+      CREATE INDEX IF NOT EXISTS idx_automation_rules_match_category
+        ON Automation_Rules(match_type, category_id, enabled);
+    `)
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS Merchant_Registry (
         normalized_name TEXT PRIMARY KEY,

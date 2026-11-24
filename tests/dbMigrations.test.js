@@ -7,7 +7,7 @@ function makeDatabase() {
   const db = new Database(':memory:')
   db.exec(`
     CREATE TABLE Accounts (id INTEGER PRIMARY KEY);
-    CREATE TABLE Transactions (id INTEGER PRIMARY KEY);
+    CREATE TABLE Transactions (id INTEGER PRIMARY KEY, transaction_date TEXT, value_date TEXT, account_id INTEGER, transaction_type TEXT, amount REAL, business_entity TEXT);
     CREATE TABLE Assets (id INTEGER PRIMARY KEY);
     CREATE TABLE Automation_Rules (id INTEGER PRIMARY KEY, original_string TEXT, cleaned_name TEXT, category_id INTEGER, match_type TEXT, priority INTEGER, use_count INTEGER);
     CREATE TABLE Insurance_Policies (id INTEGER PRIMARY KEY);
@@ -47,6 +47,17 @@ test('repairs missing columns in a fresh/minimal schema', () => {
     assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Informal_Debt_Payments'))
     assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Indirect_Savings'))
     assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('table', 'Budget_Recurring_Imports'))
+    for (const index of [
+      'idx_transactions_date_id',
+      'idx_transactions_value_date',
+      'idx_transactions_account_type_date_amount',
+      'idx_transactions_liability_date',
+      'idx_transactions_recurring_date',
+      'idx_transactions_duplicate_lookup',
+      'idx_automation_rules_match_category',
+    ]) {
+      assert.ok(db.prepare('SELECT name FROM sqlite_master WHERE type=? AND name=?').get('index', index), `Index ${index} should exist`)
+    }
   } finally {
     db.close()
   }
