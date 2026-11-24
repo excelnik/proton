@@ -1,6 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useCallback } = React
 const db = require('../db/index.js')
+const { recurringMonthlyBudgetAmount, adjustPlanForRecurringImports } = require('../lib/budgetUtils.js')
 const { getDateColumn } = require('../db/index.js')
 
 function Budget({ selectedMonth, setSelectedMonth }) {
@@ -49,11 +50,12 @@ function Budget({ selectedMonth, setSelectedMonth }) {
         WHERE category_id=? AND budget_period=?
       `).get(cat.id, `${selectedMonth}-01`)?.planned_amount ?? 0
 
-      // ממוצע 3 חודשים אחרונים
-      const d = new Date(`${selectedMonth}-01`)
-      d.setMonth(d.getMonth() - 3)
-      const from3 = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-      const to3 = `${selectedMonth}-28`
+      // ממוצע שלושת החודשים המלאים שקדמו לחודש המתוכנן.
+      const monthStart = new Date(`${selectedMonth}-01T00:00:00`)
+      const fromDate = new Date(monthStart.getFullYear(), monthStart.getMonth() - 3, 1)
+      const toDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), 0)
+      const from3 = `${fromDate.getFullYear()}-${String(fromDate.getMonth() + 1).padStart(2, '0')}-01`
+      const to3 = `${toDate.getFullYear()}-${String(toDate.getMonth() + 1).padStart(2, '0')}-${String(toDate.getDate()).padStart(2, '0')}`
 
       const avg3 = db.prepare(`
         SELECT COALESCE(SUM(amount) / 3.0, 0) as avg
@@ -73,6 +75,65 @@ function Budget({ selectedMonth, setSelectedMonth }) {
 
     setCategories(cats)
     setBudgetRows(rows)
+  }
+
+  function handleImportRecurring() {
+    const templates = db.prepare(`
+      SELECT id, amount, frequency, season_months, category_id, minimum_commitment
+      FROM Recurring_Templates
+      WHERE is_active=1 AND type='recurring' AND category_id IS NOT NULL
+    `).all()
+
+    const monthlyAmount = recurringMonthlyBudgetAmount
+
+    const imports = templates.map(template => ({
+      ...template, monthly_amount: monthlyAmount(template),
+    })).filter(template => template.monthly_amount > 0)
+
+    const period = `${selectedMonth}-01`
+    const previousCount = db.prepare('SELECT COUNT(*) AS count FROM Budget_Recurring_Imports WHERE budget_period=?').get(period)?.count || 0
+    if (!imports.length && !previousCount) {
+      alert('אין הוראות קבע פעילות עם קטגוריה וסכום שניתן לייבא לתקציב.')
+      return
+    }
+    const prompt = imports.length
+      ? `לעדכן בתקציב ${imports.length} הוראות קבע לחודש הנבחר? סכום חודשי יחושב לפי התדירות; תשלום שנתי יחולק ל-12 ותשלום עונתי לפי חודשי העונה. ייבוא חוזר לא יוסיף סכומים פעמיים.`
+      : 'לא נותרו הוראות קבע לייבוא. להסיר מהתקציב את רכיבי ההוראות שיובאו בעבר?'
+    if (!confirm(prompt)) return
+    const apply = db.transaction(() => {
+      const previous = db.prepare(`
+        SELECT category_id, SUM(monthly_amount) AS total
+        FROM Budget_Recurring_Imports WHERE budget_period=? GROUP BY category_id
+      `).all(period)
+      const oldTotals = new Map(previous.map(row => [row.category_id, Number(row.total) || 0]))
+      const newTotals = new Map()
+      for (const item of imports) {
+        newTotals.set(item.category_id, (newTotals.get(item.category_id) || 0) + item.monthly_amount)
+      }
+
+      const categoryIds = new Set([...oldTotals.keys(), ...newTotals.keys()])
+      const readPlan = db.prepare('SELECT planned_amount FROM Budget_Goals WHERE category_id=? AND budget_period=?')
+      const savePlan = db.prepare(`
+        INSERT INTO Budget_Goals (category_id, budget_period, planned_amount)
+        VALUES (?, ?, ?)
+        ON CONFLICT(category_id, budget_period) DO UPDATE SET planned_amount=excluded.planned_amount
+      `)
+      for (const categoryId of categoryIds) {
+        const planned = Number(readPlan.get(categoryId, period)?.planned_amount) || 0
+        const next = adjustPlanForRecurringImports(planned, oldTotals.get(categoryId), newTotals.get(categoryId))
+        savePlan.run(categoryId, period, next)
+      }
+
+      db.prepare('DELETE FROM Budget_Recurring_Imports WHERE budget_period=?').run(period)
+      const saveImport = db.prepare(`
+        INSERT INTO Budget_Recurring_Imports (budget_period, recurring_id, category_id, monthly_amount)
+        VALUES (?, ?, ?, ?)
+      `)
+      imports.forEach(item => saveImport.run(period, item.id, item.category_id, item.monthly_amount))
+    })
+    apply()
+    loadBudget()
+    alert('הוראות הקבע עודכנו בתקציב החודשי. ניתן לערוך את הסכום המתוכנן כרגיל.')
   }
 
   useEffect(() => { loadBudget() }, [selectedMonth])
@@ -131,7 +192,7 @@ function Budget({ selectedMonth, setSelectedMonth }) {
       React.createElement('h1', { style: styles.title }, 'תכנון תקציב'),
       React.createElement('div', { style: styles.headerLeft },
         React.createElement('button', { style: styles.btnAction, onClick: handleDuplicate, title: 'שכפל מחודש קודם' }, '📋 שכפל'),
-        React.createElement('button', { style: styles.btnAction, title: 'ייבא תנועות קבועות', onClick: () => alert('יגיע בקרוב — ממתין למודול הלוואות והו"ק') }, '🧲 ייבא קבועות'),
+        React.createElement('button', { style: styles.btnAction, title: 'ייבא תנועות קבועות', onClick: handleImportRecurring }, '🧲 ייבא קבועות'),
         React.createElement('button', { style: { ...styles.btnAction, color: '#E11D48' }, onClick: handleClear, title: 'נקה הכל' }, '🗑 נקה הכל'),
         React.createElement('select', {
           style: styles.monthSelect,
@@ -213,6 +274,9 @@ function BudgetColumn(title, rows, onChange, fmt) {
                 ),
                 row.actual > 0 && React.createElement('p', { style: { ...styles.hint, color: row.actual > row.planned && row.planned > 0 ? '#E11D48' : '#64748B' } },
                   `בפועל: ${fmt(row.actual)}`
+                ),
+                row.planned > 0 && React.createElement('p', { style: { ...styles.hint, color: row.actual > row.planned ? '#E11D48' : '#64748B', fontWeight: '600' } },
+                  `ניצול תקציב: ${Math.round((row.actual / row.planned) * 100)}%`
                 ),
               ),
             )

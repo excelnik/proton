@@ -1,8 +1,11 @@
 const React = require('react')
+const APP_VERSION = require('../../package.json').version
+const DISPLAY_VERSION = `v${APP_VERSION.replace('-beta.', ' Beta ')}`
 const { useState, useEffect } = require('react')
 const db = require('../db/index.js')
 const os = require('os')
 const path = require('path')
+const { listMerchants, setMerchantStatus } = require('../lib/merchantRegistry.js')
 
 const SETTINGS_KEYS = {
   DEFAULT_DAY: 'default_transaction_day',
@@ -44,6 +47,8 @@ function Settings() {
   const [rules, setRules] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [editRule, setEditRule] = useState(null)
+  const [merchants, setMerchants] = useState([])
+  const [showMerchants, setShowMerchants] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetStep, setResetStep] = useState(0)
   const [deleteStep, setDeleteStep] = useState(0) // 0: כפתור | 1: בדיקה | 2: מחיקה
@@ -61,6 +66,12 @@ function Settings() {
   }
 
   useEffect(() => { if (showRules) loadRules() }, [showRules])
+
+  function loadMerchants() {
+    setMerchants(listMerchants(db))
+  }
+
+  useEffect(() => { if (showMerchants) loadMerchants() }, [showMerchants])
 
   function handleSave() {
     saveSetting(SETTINGS_KEYS.DEFAULT_DAY, defaultDay)
@@ -110,6 +121,7 @@ function Settings() {
     // שלב 3 — מחיקה בפועל, עטופה בטרנזקציה אחת (הכל או כלום)
     const deleteAll = db.transaction(() => {
       db.prepare('DELETE FROM Transactions').run()
+      db.prepare('DELETE FROM Budget_Recurring_Imports').run()
       db.prepare('DELETE FROM Budget_Goals').run()
       db.prepare('DELETE FROM Liabilities').run()
       db.prepare('DELETE FROM Insurance_Policies').run()
@@ -138,77 +150,44 @@ function Settings() {
   // ──── מחיקה בטוחה של נתונים ────
   async function handleDeleteData() {
     if (deleteStep === 0) {
-      // שלב 1: בדוק אם המשתמש רוצה לגבות
-      const shouldBackup = confirm(
-        '⚠️ הסרת פרוטון\n\n' +
-        'מומלץ מאוד לגבות את הנתונים לפני המחיקה!\n\n' +
-        'לחץ OK כדי לגבות, או Cancel כדי להמשיך ללא גיבוי.'
+      const confirmed = confirm(
+        'התחלה מחדש בפרוטון\n\n' +
+        'כל הנתונים הפעילים יועברו אוטומטית לתיקיית גיבוי מתוארכת.\n' +
+        'לאחר מכן פרוטון ייצור מסד נתונים חדש וריק בהפעלה הבאה.\n\n' +
+        'מומלץ להמשיך רק אם ברצונך להתחיל מאפס. להמשיך?'
       )
-      
-      if (shouldBackup) {
-        // גבה את הנתונים
-        try {
-          const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
-          const result = await ipcRenderer.invoke('export-db', dbPath)
-          if (!result.success && !result.cancelled) {
-            alert('⚠️ שגיאה בגיבוי: ' + result.error)
-            return
-          }
-          if (result.cancelled) {
-            alert('⚠️ ביטלת את הגיבוי. להמשך מחיקה?')
-          } else {
-            alert('✓ גיבוי בוצע בהצלחה:\n' + result.path)
-          }
-        } catch (e) {
-          alert('⚠️ שגיאה בגיבוי: ' + e.message)
-          return
-        }
-      }
-
-      // עבור לשלב 2: אישור סופי
+      if (!confirmed) return
       setDeleteStep(1)
-      setDeleteMessage('🚨 אישור אחרון\n\nכל הנתונים יימחקו ופרוטון יסגר.\nפעולה זו לא ניתנת לביטול!')
+      setDeleteMessage('אישור אחרון\n\nמסד הנתונים הנוכחי יועבר בשלמותו לתיקיית גיבוי. פרוטון ייסגר, ובהפעלה הבאה ייווצר מסד נתונים חדש.')
       return
     }
 
     if (deleteStep === 1) {
-      // שלב 2: אישור סופי
-      const confirmed = confirm(deleteMessage)
-      if (!confirmed) {
+      if (!confirm(deleteMessage)) {
         setDeleteStep(0)
         setDeleteMessage('')
         return
       }
 
-      // שלב 3: מחיקה בטוחה
       setDeleteStep(2)
-      setDeleteMessage('🔄 מוחק נתונים...')
-
+      setDeleteMessage('מכין סביבת נתונים חדשה...')
       try {
         const dbPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'proton.db')
-        
-        // סגור את ה-Database
         db.close()
-        
-        // קרא ל-safe-delete-db handler
         const result = await ipcRenderer.invoke('safe-delete-db', dbPath)
-        
-        if (result.success) {
-          setDeleteMessage('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון:\n1. הפעל > appwiz.cpl\n2. חפש "Pruton" ו-Uninstall')
-          alert('✓ הנתונים נמחקו בהצלחה!\n\nכעת תוכל להסיר את פרוטון דרך:\nהגדרות > אפליקציות > הסר אפליקציה')
 
-          // סגור את האפליקציה
-          setTimeout(() => {
-            ipcRenderer.send('quit-app')
-          }, 1000)
+        if (result.success) {
+          const backupNotice = result.backupPath
+            ? '\n\nהנתונים הישנים נשמרו כאן:\n' + result.backupPath
+            : ''
+          alert('ההתחלה מחדש הוכנה בהצלחה. בהפעלה הבאה ייווצר מסד נתונים ריק.' + backupNotice)
+          setTimeout(() => ipcRenderer.send('quit-app'), 1000)
         } else {
-          // חיבור ה-DB כבר נסגר לעיל ולא ניתן לפתוח אותו מחדש בלי להפעיל את פרוטון מחדש —
-          // אסור לתת למשתמש להמשיך להשתמש באפליקציה כאילו כלום לא קרה
-          setDeleteMessage('❌ המחיקה נכשלה: ' + result.error + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+          setDeleteMessage('הפעולה נכשלה: ' + result.error + '\n\nמסד הנתונים נסגר. סגור את פרוטון והפעל אותו מחדש לפני ניסיון נוסף.')
           setDeleteStep(3)
         }
       } catch (e) {
-        setDeleteMessage('❌ שגיאה: ' + e.message + '\n\nחיבור מסד הנתונים נסגר ולא ניתן להמשיך להשתמש בפרוטון כרגע. סגור את האפליקציה ופתח אותה מחדש, ואז נסה שוב.')
+        setDeleteMessage('שגיאה: ' + e.message + '\n\nסגור את פרוטון והפעל אותו מחדש.')
         setDeleteStep(3)
       }
     }
@@ -318,11 +297,17 @@ function Settings() {
       ),
 
       showRules && React.createElement('div', null,
+        React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', marginBottom: 10 } },
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => setEditRule({
+            id: null, original_string: '', cleaned_name: '', category_id: null, account_id: null,
+            min_amount: null, max_amount: null, valid_from: null, valid_to: null, enabled: 1,
+          }) }, '+ כלל סיווג חדש'),
+        ),
         rules.length === 0
           ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'אין חוקים עדיין')
           : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
               rules.map(rule =>
-                React.createElement('div', { key: rule.id, style: styles.ruleRow },
+                React.createElement('div', { key: rule.id, style: { ...styles.ruleRow, opacity: rule.enabled === 0 ? 0.55 : 1 } },
                   React.createElement('div', { style: { flex: 1, minWidth: 0 } },
                     React.createElement('p', { style: { fontSize: 13, fontWeight: '500', color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, rule.original_string),
                     React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, (() => {
@@ -332,7 +317,18 @@ function Settings() {
                       const catDisplay = cat?.parent_id
                         ? `${cat.parent_name} ← ${cat.name}`
                         : (cat?.name || 'ללא קטגוריה')
-                      return `→ ${rule.category_icon || ''} ${catDisplay} | שימושים: ${rule.use_count}`
+                      const accountName = rule.account_id
+                        ? db.prepare('SELECT name FROM Accounts WHERE id=?').get(rule.account_id)?.name
+                        : null
+                      const conditions = [
+                        accountName,
+                        rule.min_amount != null ? `מ-₪${rule.min_amount}` : null,
+                        rule.max_amount != null ? `עד ₪${rule.max_amount}` : null,
+                        rule.valid_from ? `מ-${rule.valid_from}` : null,
+                        rule.valid_to ? `עד-${rule.valid_to}` : null,
+                        rule.enabled === 0 ? 'מושבת' : null,
+                      ].filter(Boolean).join(' · ')
+                      return `→ ${rule.category_icon || ''} ${catDisplay} | שימושים: ${rule.use_count}${conditions ? ' | ' + conditions : ''}`
                     })()),
                   ),
                   React.createElement('div', { style: { display: 'flex', gap: 6 } },
@@ -347,6 +343,44 @@ function Settings() {
                   ),
                 )
               )
+            )
+      ),
+    ),
+
+    // ── ניהול עסקים מוכרים ולא מוכרים ──
+    React.createElement('div', { style: styles.section },
+      React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showMerchants ? 14 : 0 } },
+        React.createElement('div', null,
+          React.createElement('h2', { style: styles.sectionTitle }, 'ניהול עסקים'),
+          React.createElement('p', { style: styles.settingDesc }, 'עסקים חדשים מסומנים באדום בייבוא עד לאישור מפורש'),
+        ),
+        React.createElement('button', {
+          style: styles.btnSecondary,
+          onClick: () => setShowMerchants(s => !s),
+        }, showMerchants ? 'סגור' : 'נהל עסקים'),
+      ),
+      showMerchants && React.createElement('div', null,
+        merchants.length === 0
+          ? React.createElement('p', { style: { color: '#94A3B8', fontSize: 13 } }, 'עדיין לא זוהו עסקים בקובצי יבוא')
+          : React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              merchants.map(merchant => React.createElement('div', {
+                key: merchant.normalized_name,
+                style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 10px', borderRadius: 8, border: '1px solid #E2E8F0', backgroundColor: merchant.status === 'known' ? '#fff' : '#FEF2F2' },
+              },
+                React.createElement('div', { style: { minWidth: 0 } },
+                  React.createElement('p', { style: { fontSize: 13, fontWeight: 500, color: '#0F172A' } }, merchant.name),
+                  React.createElement('p', { style: { fontSize: 11, color: merchant.status === 'known' ? '#15803D' : '#B91C1C' } }, merchant.status === 'known' ? 'עסק מוכר ומאושר' : 'עסק לא מוכר — דורש בדיקה'),
+                ),
+                React.createElement('button', {
+                  style: merchant.status === 'known'
+                    ? { ...styles.btnSecondary, fontSize: 11, padding: '5px 8px' }
+                    : { ...styles.btnPrimary, fontSize: 11, padding: '5px 8px' },
+                  onClick: () => {
+                    setMerchantStatus(db, merchant.normalized_name, merchant.status === 'known' ? 'unrecognized' : 'known')
+                    loadMerchants()
+                  },
+                }, merchant.status === 'known' ? 'העבר ללא מוכר' : 'אשר עסק'),
+              ))
             )
       ),
     ),
@@ -374,15 +408,15 @@ function Settings() {
 
       // איפוס מערכת
       React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
-        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס מערכת'),
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '⚠️ איפוס נתונים פיננסיים'),
         React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-          'מחיקת כל התנועות והנתונים. פעולה בלתי הפיכה!'
+          'מוחק תנועות, חשבונות והתחייבויות. הגדרות וקטגוריות נשמרות. להתחלה נקייה לחלוטין השתמש באפשרות התחלה מחדש למטה.'
         ),
         !showResetConfirm
           ? React.createElement('button', {
               style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
               onClick: () => setShowResetConfirm(true),
-            }, 'איפוס מערכת')
+            }, 'נקה פעילות פיננסית')
           : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
               React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#E11D48', marginBottom: 10 } },
                 resetStep === 1 ? '⚠️ האם אתה בטוח?' : '🚨 אישור אחרון!'
@@ -400,17 +434,17 @@ function Settings() {
             ),
       ),
 
-      // הסרת פרוטון
+      // התחלה מחדש – שומרת את מסד הנתונים הישן בתיקיית גיבוי
       React.createElement('div', { style: { ...styles.section, borderColor: '#FCA5A5' } },
-        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🗑 הסרת פרוטון'),
+        React.createElement('h2', { style: { ...styles.sectionTitle, color: '#E11D48' } }, '🔄 התחלה מחדש – מסד נתונים חדש'),
         React.createElement('p', { style: { fontSize: 13, color: '#475569', marginBottom: 12 } },
-          'מחיקה בטוחה של הנתונים עם אפשרות לגיבוי.'
+          'העברת כל הנתונים הישנים לתיקיית גיבוי מתוארכת ויצירת מסד נתונים חדש וריק. התוכנה תיסגר ותופעל מחדש ידנית.'
         ),
         deleteStep === 0
           ? React.createElement('button', {
               style: { ...styles.btnPrimary, backgroundColor: '#E11D48', width: '100%' },
               onClick: handleDeleteData,
-            }, '🗑 הסר את פרוטון')
+            }, 'התחל מחדש עם נתונים ריקים')
           : React.createElement('div', { style: { backgroundColor: '#FEF2F2', borderRadius: 10, padding: 12 } },
               React.createElement('p', { style: { fontSize: 13, color: '#E11D48', marginBottom: 10, fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: '1.5' } }, deleteMessage),
               deleteStep === 1 && React.createElement('div', { style: { display: 'flex', gap: 6 } },
@@ -449,30 +483,107 @@ function Settings() {
 
 function EditRuleModal({ rule, onClose, onSave }) {
   const categories = db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY sort_order').all()
+  const accounts = db.prepare('SELECT id, name FROM Accounts WHERE is_active=1 ORDER BY name').all()
+  const [originalString, setOriginalString] = useState(rule.original_string || '')
   const [categoryId, setCategoryId] = useState(rule.category_id?.toString() ?? '')
   const [cleanedName, setCleanedName] = useState(rule.cleaned_name || rule.original_string)
+  const [accountId, setAccountId] = useState(rule.account_id?.toString() ?? '')
+  const [minAmount, setMinAmount] = useState(rule.min_amount == null ? '' : String(rule.min_amount))
+  const [maxAmount, setMaxAmount] = useState(rule.max_amount == null ? '' : String(rule.max_amount))
+  const [validFrom, setValidFrom] = useState(rule.valid_from || '')
+  const [validTo, setValidTo] = useState(rule.valid_to || '')
+  const [enabled, setEnabled] = useState(rule.enabled !== 0)
 
   function handleSave() {
-    db.prepare('UPDATE Automation_Rules SET category_id=?, cleaned_name=? WHERE id=?')
-      .run(categoryId || null, cleanedName, rule.id)
+    const min = minAmount === '' ? null : Number(minAmount)
+    const max = maxAmount === '' ? null : Number(maxAmount)
+    if (min != null && (!Number.isFinite(min) || min < 0)) { alert('סכום מינימום חייב להיות מספר חיובי'); return }
+    if (max != null && (!Number.isFinite(max) || max < 0)) { alert('סכום מקסימום חייב להיות מספר חיובי'); return }
+    if (min != null && max != null && min > max) { alert('סכום מינימום לא יכול להיות גבוה מסכום מקסימום'); return }
+    if (validFrom && validTo && validFrom > validTo) { alert('תאריך התחלה לא יכול להיות אחרי תאריך הסיום'); return }
+
+    if (!rule.id && !originalString.trim()) { alert('נא להזין שם עסק או טקסט לזיהוי'); return }
+    if (!cleanedName.trim()) { alert('נא להזין שם תצוגה'); return }
+    if (rule.id) {
+      db.prepare(`
+        UPDATE Automation_Rules
+        SET category_id=?, cleaned_name=?, account_id=?, min_amount=?, max_amount=?,
+            valid_from=?, valid_to=?, enabled=?
+        WHERE id=?
+      `).run(
+        categoryId || null, cleanedName.trim(), accountId || null, min, max,
+        validFrom || null, validTo || null, enabled ? 1 : 0, rule.id
+      )
+    } else {
+      db.prepare(`
+        INSERT INTO Automation_Rules
+          (original_string, cleaned_name, category_id, match_type, priority, use_count,
+           account_id, min_amount, max_amount, valid_from, valid_to, enabled)
+        VALUES (?, ?, ?, 'contains', 0, 0, ?, ?, ?, ?, ?, ?)
+      `).run(
+        originalString.trim().toLowerCase(), cleanedName.trim(), categoryId || null,
+        accountId || null, min, max, validFrom || null, validTo || null, enabled ? 1 : 0
+      )
+    }
     onSave()
   }
 
   return React.createElement('div', { style: styles.overlay },
-    React.createElement('div', { style: { ...styles.modal, maxWidth: 420 } },
+    React.createElement('div', { style: { ...styles.modal, maxWidth: 480 } },
       React.createElement('div', { style: styles.modalHeader },
-        React.createElement('h2', { style: styles.modalTitle }, 'עריכת חוק זיהוי'),
+        React.createElement('h2', { style: styles.modalTitle }, rule.id ? 'עריכת חוק זיהוי' : 'יצירת חוק סיווג'),
         React.createElement('button', { style: styles.closeBtn, onClick: onClose }, '✕'),
       ),
-      React.createElement('div', { style: styles.modalBody },
-        React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8 } },
-          `שם מקורי: ${rule.original_string}`
-        ),
-        Field('שם נקי (כפי שיוצג)', React.createElement('input', { style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value) })),
-        Field('קטגוריה', React.createElement('select', { style: styles.input, value: categoryId, onChange: e => setCategoryId(e.target.value) },
+      React.createElement('div', { style: { ...styles.modalBody, maxHeight: '70vh', overflowY: 'auto' } },
+        !rule.id
+          ? Field('טקסט לזיהוי (שם עסק / תיאור)', React.createElement('input', {
+              style: styles.input, value: originalString, onChange: e => setOriginalString(e.target.value),
+              placeholder: 'לדוגמה: חברת החשמל'
+            }))
+          : React.createElement('p', { style: { fontSize: 12, color: '#64748B', marginBottom: 16, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8 } },
+              `שם מקורי: ${rule.original_string}`
+            ),
+        Field('שם נקי (כפי שיוצג)', React.createElement('input', {
+          style: styles.input, value: cleanedName, onChange: e => setCleanedName(e.target.value),
+          placeholder: 'שם שיוצג במערכת'
+        })),
+        Field('קטגוריה', React.createElement('select', {
+          style: styles.input, value: categoryId, onChange: e => setCategoryId(e.target.value)
+        },
           React.createElement('option', { value: '' }, '— ללא קטגוריה —'),
           categories.map(c => React.createElement('option', { key: c.id, value: c.id }, `${c.name} ${c.icon || ''}`))
         )),
+        React.createElement('p', { style: { fontSize: 12, fontWeight: '600', color: '#334155', margin: '12px 0 8px' } }, 'תנאי התאמה (אופציונליים)'),
+        Field('חשבון', React.createElement('select', {
+          style: styles.input, value: accountId, onChange: e => setAccountId(e.target.value)
+        },
+          React.createElement('option', { value: '' }, 'כל החשבונות'),
+          accounts.map(a => React.createElement('option', { key: a.id, value: String(a.id) }, a.name))
+        )),
+        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
+          Field('סכום מינימום (₪)', React.createElement('input', {
+            style: styles.input, type: 'number', min: 0, step: '0.01', value: minAmount,
+            onChange: e => setMinAmount(e.target.value), placeholder: 'ללא הגבלה'
+          })),
+          Field('סכום מקסימום (₪)', React.createElement('input', {
+            style: styles.input, type: 'number', min: 0, step: '0.01', value: maxAmount,
+            onChange: e => setMaxAmount(e.target.value), placeholder: 'ללא הגבלה'
+          })),
+        ),
+        React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
+          Field('מתאריך', React.createElement('input', {
+            style: styles.input, type: 'date', value: validFrom, onChange: e => setValidFrom(e.target.value)
+          })),
+          Field('עד תאריך', React.createElement('input', {
+            style: styles.input, type: 'date', value: validTo, onChange: e => setValidTo(e.target.value)
+          })),
+        ),
+        Field('החוק פעיל', React.createElement('input', {
+          type: 'checkbox', checked: enabled, onChange: e => setEnabled(e.target.checked)
+        })),
+        React.createElement('p', { style: { fontSize: 11, color: '#64748B', marginTop: -4 } },
+          'החוק מציע קטגוריה רק כשהתנאים מתקיימים. הוא אינו מאשר או מייבא תנועות אוטומטית.'
+        ),
       ),
       React.createElement('div', { style: styles.modalFooter },
         React.createElement('button', { style: styles.btnSecondary, onClick: onClose }, 'ביטול'),
@@ -536,7 +647,7 @@ function About() {
         ),
         React.createElement('div', null,
           React.createElement('p', { style: { fontSize: 20, fontWeight: 'bold', color: '#0F172A', marginBottom: 2 } }, 'פרוטון'),
-          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, 'v0.3.1 Beta'),
+          React.createElement('p', { style: { fontSize: 13, color: '#64748B', marginBottom: 2 } }, DISPLAY_VERSION),
           React.createElement('p', { style: { fontSize: 13, color: '#475569' } }, 'מערכת ניהול פיננסי אישי'),
         ),
       ),

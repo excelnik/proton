@@ -119,6 +119,7 @@ db.exec(`
     source              TEXT    NOT NULL DEFAULT 'manual',
     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
     value_date          TEXT,
+    import_id           TEXT,
     liability_id        INTEGER REFERENCES Liabilities(id),
     recurring_id        INTEGER REFERENCES Recurring_Templates(id),
     parent_id           INTEGER REFERENCES Transactions(id),
@@ -211,6 +212,7 @@ db.exec(`
     type                TEXT    NOT NULL DEFAULT 'recurring',
     amount              REAL    NOT NULL DEFAULT 0,
     frequency           TEXT    NOT NULL DEFAULT 'monthly',
+    season_months       TEXT,
     charge_day          INTEGER NOT NULL DEFAULT 1,
     first_charge_date   TEXT,
     account_id          INTEGER REFERENCES Accounts(id),
@@ -227,6 +229,12 @@ db.exec(`
     is_active           INTEGER NOT NULL DEFAULT 1
   );
 `)
+
+// Repair columns only after all referenced tables have been created.
+// Older startup migrations above are retained for backward compatibility, but errors are no longer
+// silently relied upon: this idempotent pass covers both fresh and existing databases.
+const { runMigrations } = require('./migrations.js')
+runMigrations(db)
 
 // קטגוריות ברירת מחדל
 const count = db.prepare('SELECT COUNT(*) as c FROM Categories').get()

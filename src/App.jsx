@@ -9,6 +9,7 @@ const Categorize = require('./pages/Categorize.jsx')
 const Budget = require('./pages/Budget.jsx')
 const Maaser = require('./pages/Maaser.jsx')
 const Settings = require('./pages/Settings.jsx')
+const ReportIssue = require('./components/ReportIssue.jsx')
 const Loans = require('./pages/Loans.jsx')
 const Insurance = require('./pages/Insurance.jsx')
 const Savings = require('./pages/Savings.jsx')
@@ -26,6 +27,102 @@ function App() {
   // viewScope: 'all' | 'YYYY' | 'YYYY-MM' — חלון צפייה חופשי, כרגע רק לדף תנועות
   const [viewScope, setViewScope] = useState('all')
   const [updateNotification, setUpdateNotification] = useState(null)
+  const [showReport, setShowReport] = useState(false)
+
+  window.__prutonCurrentPage = currentPage
+
+  useEffect(() => {
+    const diagnostics = { interactions: [], errors: [], lastInteraction: null }
+    window.__prutonDiagnostics = diagnostics
+
+    function describeTarget(target) {
+      const actionable = target?.closest?.('button,[role="button"],a,input,select,textarea,[data-report-id]')
+      const el = actionable || target
+      return {
+        tag: el?.tagName || 'unknown',
+        id: el?.id || null,
+        role: el?.getAttribute?.('role') || null,
+        reportId: el?.getAttribute?.('data-report-id') || null,
+        ariaLabel: el?.getAttribute?.('aria-label') || null,
+        title: el?.getAttribute?.('title') || null,
+        label: ['BUTTON', 'A'].includes(el?.tagName) ? String(el.innerText || el.textContent || '').trim().slice(0, 100) : null,
+        inputType: ['INPUT', 'SELECT', 'TEXTAREA'].includes(el?.tagName) ? (el.type || el.tagName.toLowerCase()) : null,
+        placeholder: ['INPUT', 'TEXTAREA'].includes(el?.tagName) ? (el.placeholder || null) : null,
+      }
+    }
+
+    function recordInteraction(item) {
+      diagnostics.lastInteraction = item
+      diagnostics.interactions.push(item)
+      if (diagnostics.interactions.length > 40) diagnostics.interactions.shift()
+    }
+
+    function onClick(event) {
+      const target = describeTarget(event.target)
+      if (target.label && target.label.includes('דיווח ותיעוד')) return
+      recordInteraction({
+        at: new Date().toISOString(),
+        page: window.__prutonCurrentPage || 'unknown',
+        action: 'click',
+        target,
+      })
+    }
+
+    function onChange(event) {
+      const el = event.target
+      if (!el || !['SELECT', 'INPUT'].includes(el.tagName)) return
+      recordInteraction({
+        at: new Date().toISOString(),
+        page: window.__prutonCurrentPage || 'unknown',
+        action: 'change',
+        target: {
+          tag: el.tagName,
+          id: el.id || null,
+          role: el.getAttribute('role') || null,
+          ariaLabel: el.getAttribute('aria-label') || null,
+          inputType: el.type || el.tagName.toLowerCase(),
+          selectedLabel: el.tagName === 'SELECT' ? (el.options && el.options[el.selectedIndex] ? el.options[el.selectedIndex].text : null) : null,
+          checked: ['checkbox', 'radio'].includes(el.type) ? Boolean(el.checked) : null,
+          valueCaptured: false,
+        },
+      })
+    }
+
+    function onError(event) {
+      diagnostics.errors.push({
+        at: new Date().toISOString(),
+        type: 'window.error',
+        message: String(event.message || 'Unknown error').slice(0, 500),
+        file: event.filename || null,
+        line: event.lineno || null,
+        column: event.colno || null,
+        page: window.__prutonCurrentPage || 'unknown',
+      })
+      if (diagnostics.errors.length > 20) diagnostics.errors.shift()
+    }
+
+    function onRejection(event) {
+      const reason = event.reason
+      diagnostics.errors.push({
+        at: new Date().toISOString(),
+        type: 'unhandledrejection',
+        message: String(reason?.message || reason || 'Unknown rejection').slice(0, 500),
+        page: window.__prutonCurrentPage || 'unknown',
+      })
+      if (diagnostics.errors.length > 20) diagnostics.errors.shift()
+    }
+
+    document.addEventListener('click', onClick, true)
+    document.addEventListener('change', onChange, true)
+    window.addEventListener('error', onError)
+    window.addEventListener('unhandledrejection', onRejection)
+    return () => {
+      document.removeEventListener('click', onClick, true)
+      document.removeEventListener('change', onChange, true)
+      window.removeEventListener('error', onError)
+      window.removeEventListener('unhandledrejection', onRejection)
+    }
+  }, [])
 
   useEffect(() => {
     const { ipcRenderer } = require('electron')
@@ -49,11 +146,11 @@ function App() {
     })
 
     // שגיאה בעדכון
-    ipcRenderer.on('update-error', (error) => {
+    ipcRenderer.on('update-error', (_event, error) => {
       console.error('שגיאה בעדכון:', error)
       setUpdateNotification({
         type: 'error',
-        message: 'שגיאה בעדכון: ' + error,
+        message: 'שגיאה בעדכון: ' + (error || 'שגיאה לא ידועה'),
       })
     })
 
@@ -111,10 +208,14 @@ function App() {
   }
 
   return React.createElement('div', { style: styles.app },
-    React.createElement(Sidebar, { currentPage, onNavigate: setCurrentPage }),
+    React.createElement(Sidebar, { currentPage, onNavigate: setCurrentPage, onReport: () => setShowReport(true) }),
     React.createElement('main', { style: styles.main },
       renderPage()
     ),
+    showReport && React.createElement(ReportIssue, {
+      onClose: () => setShowReport(false),
+      currentPage,
+    }),
     // הודעת עדכון
     updateNotification && React.createElement('div', { style: { ...styles.updateBanner, ...(updateNotification.type === 'error' ? styles.errorBanner : updateNotification.type === 'downloaded' ? styles.successBanner : styles.infoBanner) } },
       React.createElement('div', { style: styles.updateContent },

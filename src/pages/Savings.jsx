@@ -1,6 +1,7 @@
 const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
+const IndirectSavingsPanel = require('../components/IndirectSavingsPanel.jsx')
 
 function calculateRequired(goal) {
   const today = new Date()
@@ -93,6 +94,8 @@ function Savings() {
       KpiCard('סך יעדים כולל', fmt(summary.totalTarget), '#2563EB'),
       KpiCard('הפקדה חודשית נדרשת', fmt(summary.totalRequired), '#F59E0B'),
     ),
+
+    React.createElement(IndirectSavingsPanel),
 
     // Grid כרטיסים
     goals.length === 0

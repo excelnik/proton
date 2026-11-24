@@ -5,127 +5,85 @@ const { getDateColumn } = require('../db/index.js')
 const { getScopeRange } = require('../lib/viewScope.js')
 const { addMonthsClamped, parseLocalDate } = require('../lib/dateUtils.js')
 const { generateAmortization } = require('../lib/loanAmortization.js')
+const { generateRecurringDates } = require('../lib/recurringSchedule.js')
+const { filterEligibleRules, findBestMerchantRule } = require('../lib/transactionRules.js')
 
 function generateVirtualTransactions() {
   const virtual = []
-
-  // ─── תנועות וירטואליות מהלוואות ───
   const loans = db.prepare('SELECT * FROM Liabilities WHERE is_active=1').all()
+  const recurring = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring' AND COALESCE(generate_forecast,1)=1").all()
+  const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment' AND COALESCE(generate_forecast,1)=1").all()
+  // Load all links once; never execute a SQL query inside a generated schedule loop.
+  const linked = db.prepare(`
+    SELECT liability_id, recurring_id, transaction_date, value_date, transaction_type
+    FROM Transactions
+    WHERE liability_id IS NOT NULL OR recurring_id IS NOT NULL
+  `).all()
+  const coveredLoans = new Set()
+  const coveredRecurring = new Set()
+  for (const row of linked) {
+    const loanMonth = String(row.transaction_date || '').slice(0, 7)
+    const recurringMonth = String(row.value_date || row.transaction_date || '').slice(0, 7)
+    if (row.liability_id != null && row.transaction_type === 'Expense' && /^\d{4}-\d{2}$/.test(loanMonth)) coveredLoans.add(String(row.liability_id) + '|' + loanMonth)
+    if (row.recurring_id != null && /^\d{4}-\d{2}$/.test(recurringMonth)) coveredRecurring.add(String(row.recurring_id) + '|' + recurringMonth)
+  }
+
   for (const loan of loans) {
     const schedule = generateAmortization(loan)
-
     schedule.forEach((row, i) => {
-      const monthStr = row.date.slice(0, 7)
-
-      const covered = db.prepare(`
-        SELECT id FROM Transactions
-        WHERE liability_id=? AND substr(transaction_date,1,7)=?
-      `).get(loan.id, monthStr)
-
-      if (!covered && row.monthly_payment > 0) {
+      const month = row.date.slice(0, 7)
+      if (!coveredLoans.has(`${loan.id}|${month}`) && row.monthly_payment > 0) {
         virtual.push({
-          id: `virtual_loan_${loan.id}_${i}`,
-          transaction_date: row.date,
-          amount: Math.round(row.monthly_payment),
-          transaction_type: 'Expense',
-          business_entity: loan.name,
-          category_name: 'החזר הלוואה',
-          account_id: loan.account_id,
-          liability_id: loan.id,
-          is_virtual: true,
-          is_budgetary: 0,
-          description: `תשלום ${i + 1} מתוך ${loan.duration_months}`,
+          id: `virtual_loan_${loan.id}_${i}`, transaction_date: row.date,
+          amount: Math.round(row.monthly_payment), transaction_type: 'Expense',
+          business_entity: loan.name, category_name: 'החזר הלוואה',
+          account_id: loan.account_id, liability_id: loan.id, is_virtual: true,
+          is_budgetary: 0, description: `תשלום ${i + 1} מתוך ${loan.duration_months}`,
           virtual_source: 'loan',
         })
       }
     })
   }
 
-  // ─── תנועות וירטואליות מהוראות קבע ───
-  try {
-    const templates = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='recurring'").all()
-    const today = new Date()
+  const today = new Date()
+  for (const template of recurring) {
+    const schedule = generateRecurringDates(template, today, 12)
+    schedule.forEach((date, i) => {
+      const month = date.slice(0, 7)
+      if (!coveredRecurring.has(`${template.id}|${month}`)) {
+        virtual.push({
+          id: `virtual_recurring_${template.id}_${i}`, transaction_date: date,
+          amount: template.amount, transaction_type: 'Expense', business_entity: template.name,
+          category_id: template.category_id, category_name: null, account_id: template.account_id,
+          recurring_id: template.id, is_virtual: true, is_budgetary: template.is_budgetary,
+          description: template.notes || null, virtual_source: 'recurring',
+        })
+      }
+    })
+  }
 
-    for (const t of templates) {
-      // עוגן: יום החיוב כפי שחל בחודש הנוכחי (עם clamp אם החודש הנוכחי קצר מדי)
-      const chargeDay = t.charge_day || 1
-      const anchor = new Date(today.getFullYear(), today.getMonth(), 1)
-      anchor.setDate(Math.min(chargeDay, new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()))
-
-      // צור תנועות ל-12 חודשים קדימה
-      for (let i = 0; i < 12; i++) {
-        const date = addMonthsClamped(anchor, i)
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-        const monthStr = dateStr.slice(0, 7)
-
-        // בדוק אם כבר יש תנועה אמיתית מהתבנית לחודש הזה
-        const covered = db.prepare(`
-          SELECT id FROM Transactions
-          WHERE recurring_id=? AND substr(transaction_date,1,7)=?
-        `).get(t.id, monthStr)
-
-        if (!covered) {
-          virtual.push({
-            id: `virtual_recurring_${t.id}_${i}`,
-            transaction_date: dateStr,
-            amount: t.amount,
-            transaction_type: 'Expense',
-            business_entity: t.name,
-            category_id: t.category_id,
-            category_name: null,
-            account_id: t.account_id,
-            recurring_id: t.id,
-            is_virtual: true,
-            is_budgetary: t.is_budgetary,
-            description: t.notes || null,
-            virtual_source: 'recurring',
-          })
-        }
+  for (const template of installments) {
+    const paid = template.installments_paid || 0
+    const remaining = Math.max(0, (template.num_installments || 0) - paid)
+    const startDate = template.first_charge_date ? parseLocalDate(template.first_charge_date) : today
+    for (let i = 0; i < remaining; i++) {
+      const date = addMonthsClamped(startDate, paid + i)
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      const month = dateStr.slice(0, 7)
+      if (!coveredRecurring.has(`${template.id}|${month}`)) {
+        virtual.push({
+          id: `virtual_installment_${template.id}_${i}`, transaction_date: dateStr,
+          amount: template.amount, transaction_type: 'Expense', business_entity: template.name,
+          category_id: template.category_id, category_name: null, account_id: template.account_id,
+          recurring_id: template.id, is_virtual: true, is_budgetary: template.is_budgetary,
+          description: `תשלום ${paid + i + 1} מתוך ${template.num_installments}`,
+          virtual_source: 'installment',
+        })
       }
     }
-
-    // ─── תנועות וירטואליות מעסקאות תשלומים ───
-    const installments = db.prepare("SELECT * FROM Recurring_Templates WHERE is_active=1 AND type='installment'").all()
-
-    for (const t of installments) {
-      const paid = t.installments_paid || 0
-      const remaining = t.num_installments - paid
-      const startDate = t.first_charge_date ? parseLocalDate(t.first_charge_date) : today
-
-      for (let i = 0; i < remaining; i++) {
-        const date = addMonthsClamped(startDate, paid + i)
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-        const monthStr = dateStr.slice(0, 7)
-
-        const covered = db.prepare(`
-          SELECT id FROM Transactions
-          WHERE recurring_id=? AND substr(COALESCE(value_date, transaction_date),1,7)=?
-        `).get(t.id, monthStr)
-        
-        if (!covered) {
-          virtual.push({
-            id: `virtual_installment_${t.id}_${i}`,
-            transaction_date: dateStr,
-            amount: t.amount,
-            transaction_type: 'Expense',
-            business_entity: t.name,
-            category_id: t.category_id,
-            category_name: null,
-            account_id: t.account_id,
-            recurring_id: t.id,
-            is_virtual: true,
-            is_budgetary: t.is_budgetary,
-            description: `תשלום ${paid + i + 1} מתוך ${t.num_installments}`,
-            virtual_source: 'installment',
-          })
-        }
-      }
-    }
-  } catch(e) {}
-
+  }
   return virtual
 }
-
 function Transactions({ viewScope, setViewScope }) {
   const [transactions, setTransactions] = useState([])
   const [categories, setCategories] = useState([])
@@ -142,7 +100,10 @@ function Transactions({ viewScope, setViewScope }) {
   const [filterPanel, setFilterPanel] = useState(false)
   const [filters, setFilters] = useState({ type: '', categoryId: '', accountId: '', amountMin: '', amountMax: '', dateFrom: '', dateTo: '', txId: '', tags: '', linkedType: '' })
   const [selectedIds, setSelectedIds] = useState(new Set())
+  const [visibleLimit, setVisibleLimit] = useState(200)
+  const [bulkCategoryParentId, setBulkCategoryParentId] = useState('')
   const [sortConfig, setSortConfig] = useState({ key: 'transaction_date', dir: 'desc' })
+  const deferredSearchText = React.useDeferredValue(searchText)
 
   useEffect(() => {
     const handler = e => {
@@ -173,6 +134,7 @@ function Transactions({ viewScope, setViewScope }) {
     setEditForm({
       transaction_date: tx.transaction_date,
       value_date: tx.value_date || '',
+      transaction_type: tx.transaction_type,
       amount: tx.amount.toString(),
       business_entity: tx.business_entity || '',
       category_id: tx.category_parent_id ? tx.category_parent_id.toString() : (tx.category_id?.toString() ?? ''),
@@ -186,6 +148,7 @@ function Transactions({ viewScope, setViewScope }) {
       recurring_id: tx.recurring_id?.toString() ?? '',
       savings_goal_id: tx.savings_goal_id?.toString() ?? '',
       insurance_id: tx.insurance_id?.toString() ?? '',
+      settles_credit_card_id: tx.settles_credit_card_id?.toString() ?? '',
     })
   }
 
@@ -208,19 +171,21 @@ function Transactions({ viewScope, setViewScope }) {
   function saveFullEdit(txId) {
     db.prepare(`
       UPDATE Transactions SET
-        transaction_date=?, value_date=?, amount=?, business_entity=?,
+        transaction_date=?, value_date=?, transaction_type=?, amount=?, business_entity=?,
         category_id=?, account_id=?, description=?, tags=?,
         is_budgetary=?, is_maaser_obligated=?,
-        liability_id=?, recurring_id=?, insurance_id=?
+        liability_id=?, recurring_id=?, insurance_id=?, settles_credit_card_id=?
       WHERE id=?
     `).run(
       editForm.transaction_date, editForm.value_date || null,
+      editForm.settles_credit_card_id ? 'Transfer' : editForm.transaction_type,
       parseFloat(editForm.amount), editForm.business_entity,
-      editForm.sub_category_id || editForm.category_id || null, editForm.account_id,
-      editForm.description || null, editForm.tags || null,
-      editForm.is_budgetary ? 1 : 0, editForm.is_maaser_obligated ? 1 : 0,
+      editForm.settles_credit_card_id ? null : (editForm.sub_category_id || editForm.category_id || null),
+      editForm.account_id, editForm.description || null, editForm.tags || null,
+      editForm.settles_credit_card_id ? 0 : (editForm.is_budgetary ? 1 : 0),
+      editForm.settles_credit_card_id ? 0 : (editForm.is_maaser_obligated ? 1 : 0),
       editForm.liability_id || null, editForm.recurring_id || null,
-      editForm.insurance_id || null,
+      editForm.insurance_id || null, editForm.settles_credit_card_id || null,
       txId
     )
     setEditingFull(null)
@@ -248,7 +213,7 @@ function Transactions({ viewScope, setViewScope }) {
     const { from, to } = getScopeRange(viewScope)
 
     const txs = db.prepare(`
-      SELECT t.*, c.name as category_name, a.name as account_name,
+      SELECT t.*, c.name as category_name, a.name as account_name, a.type as account_type,
         c.parent_id as category_parent_id, cp.name as parent_category_name
       FROM Transactions t
       LEFT JOIN Categories c ON t.category_id = c.id
@@ -260,14 +225,41 @@ function Transactions({ viewScope, setViewScope }) {
 
     // תנועות וירטואליות מוצגות רק בבחירת חודש בודד — הלוואות ל-20 שנה מייצרות מאות
     // תשלומים עתידיים, וב"כל הזמנים" הן היו מציפות את הטבלה בשורות לא רלוונטיות
-    const virtual = generateVirtualTransactions().filter(v =>
-      v.transaction_date.slice(0, 7) === viewScope
-    )
+    // Forecast rows are relevant only for one concrete month. Do not generate
+    // every loan/recurring schedule when viewing all history or a whole year.
+    const virtual = /^\d{4}-\d{2}$/.test(viewScope)
+      ? generateVirtualTransactions().filter(v => v.transaction_date.slice(0, 7) === viewScope)
+      : []
     // הוסף שם חשבון לוירטואליות
     const accounts = db.prepare('SELECT * FROM Accounts WHERE is_active=1').all()
     virtual.forEach(v => {
       const acc = accounts.find(a => a.id === v.account_id)
       v.account_name = acc?.name ?? '—'
+    })
+
+    // One batched duplicate-risk query instead of one query per transaction.
+    const suspiciousIds = new Set()
+    const creditIds = txs.filter(t => t.account_type === 'Credit_Card' && t.transaction_type === 'Expense' && (t.business_entity || '').trim()).map(t => t.id)
+    for (let offset = 0; offset < creditIds.length; offset += 400) {
+      const batch = creditIds.slice(offset, offset + 400)
+      if (!batch.length) continue
+      const placeholders = batch.map(() => '?').join(',')
+      const matches = db.prepare(`
+        SELECT DISTINCT current.id
+        FROM Transactions current
+        JOIN Transactions other ON other.account_id=current.account_id
+          AND other.id<>current.id
+          AND other.transaction_type='Expense'
+          AND lower(trim(COALESCE(other.business_entity,'')))=lower(trim(COALESCE(current.business_entity,'')))
+          AND ABS(other.amount-current.amount)<0.01
+          AND ABS(julianday(other.transaction_date)-julianday(current.transaction_date))<=3
+        WHERE current.id IN (${placeholders})
+          AND trim(COALESCE(current.business_entity,''))<>''
+      `).all(...batch)
+      matches.forEach(row => suspiciousIds.add(row.id))
+    }
+    txs.forEach(tx => {
+      if (suspiciousIds.has(tx.id)) tx.suspicious_reason = 'נמצא חיוב באותו עסק ובאותו סכום בטווח של שלושה ימים'
     })
 
     setTransactions([...txs, ...virtual])
@@ -276,6 +268,7 @@ function Transactions({ viewScope, setViewScope }) {
   }
 
   useEffect(() => { loadData() }, [viewScope])
+  useEffect(() => { setVisibleLimit(200) }, [viewScope, deferredSearchText, filters, sortConfig])
 
   function handleConfirmVirtual(tx) {
     db.prepare(`
@@ -308,8 +301,14 @@ function Transactions({ viewScope, setViewScope }) {
   }
 
   const fmt = n => '₪' + n.toLocaleString('he-IL')
-  const income  = transactions.filter(t => t.transaction_type === 'Income').reduce((s, t) => s + t.amount, 0)
-  const expense = transactions.filter(t => t.transaction_type === 'Expense').reduce((s, t) => s + t.amount, 0)
+  const income = React.useMemo(
+    () => transactions.reduce((sum, tx) => sum + (tx.transaction_type === 'Income' ? tx.amount : 0), 0),
+    [transactions]
+  )
+  const expense = React.useMemo(
+    () => transactions.reduce((sum, tx) => sum + (tx.transaction_type === 'Expense' ? tx.amount : 0), 0),
+    [transactions]
+  )
 
   const months = React.useMemo(() => {
     const dateCol = getDateColumn()
@@ -327,9 +326,9 @@ function Transactions({ viewScope, setViewScope }) {
       .filter(r => r.label !== 'Invalid Date')
     }, [])
 
-    const visibleTransactions = transactions.filter(tx => {
-      if (searchText) {
-        const q = searchText.toLowerCase()
+    const visibleTransactions = React.useMemo(() => transactions.filter(tx => {
+      if (deferredSearchText) {
+        const q = deferredSearchText.toLowerCase()
         const inDesc = (tx.description || '').toLowerCase().includes(q)
         const inEntity = (tx.business_entity || '').toLowerCase().includes(q)
         if (!inDesc && !inEntity) return false
@@ -347,7 +346,7 @@ function Transactions({ viewScope, setViewScope }) {
       if (filters.linkedType === 'recurring' && !tx.recurring_id) return false
       if (filters.linkedType === 'insurance' && !tx.insurance_id) return false
       return true
-    })
+    }), [transactions, deferredSearchText, filters])
 
     const sortedTransactions = React.useMemo(() => {
       const arr = [...visibleTransactions]
@@ -362,6 +361,8 @@ function Transactions({ viewScope, setViewScope }) {
       })
       return arr
     }, [visibleTransactions, sortConfig])
+
+    const displayedTransactions = sortedTransactions.slice(0, visibleLimit)
 
   return React.createElement('div', { style: { ...styles.page, position: 'relative', display: 'flex', gap: 0 } },
 
@@ -612,7 +613,7 @@ function Transactions({ viewScope, setViewScope }) {
               )
             ),
             React.createElement('tbody', null,
-              sortedTransactions.map(tx => {
+              displayedTransactions.map(tx => {
                 const isExpanded = expandedTx === tx.id
                 const isEditing = editingTx === tx.id
                 const isEditingFull = editingFull === tx.id
@@ -730,7 +731,7 @@ function Transactions({ viewScope, setViewScope }) {
                     id: `tx-row-${tx.id}`,
                     style: {
                       ...styles.tr,
-                      backgroundColor: tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : !tx.is_budgetary ? '#F1F5F9' : '#fff',
+                      backgroundColor: tx.suspicious_reason ? '#FEF2F2' : tx.is_virtual ? '#F0F9FF' : isExpanded ? '#F8FAFC' : !tx.is_budgetary ? '#F1F5F9' : '#fff',
                       opacity: tx.is_virtual ? 0.85 : 1,
                       cursor: tx.is_virtual ? 'default' : 'pointer',
                     },
@@ -756,7 +757,14 @@ function Transactions({ viewScope, setViewScope }) {
                       )
                     ),
                     React.createElement('td', { style: styles.td }, tx.transaction_date),
-                    React.createElement('td', { style: { ...styles.td, fontWeight: '500' } }, tx.business_entity || '—'),
+                    React.createElement('td', { style: { ...styles.td, fontWeight: '500', maxWidth: 260 } },
+                      React.createElement('div', { style: { fontWeight: '500' } }, tx.business_entity || '—'),
+                      tx.suspicious_reason && React.createElement('div', { title: tx.suspicious_reason, style: { fontSize: 10, color: '#B91C1C', marginTop: 3 } }, '⚠ בדוק חיוב אשראי דומה'),
+                      tx.description && React.createElement('div', {
+                        style: { fontSize: 11, fontWeight: '400', color: '#64748B', marginTop: 3, whiteSpace: 'normal', overflowWrap: 'anywhere' },
+                        title: tx.description,
+                      }, tx.description),
+                    ),
                     React.createElement('td', { style: styles.td },
                       tx.category_parent_id
                         ? React.createElement('span', { style: styles.badge }, tx.parent_category_name || '—')
@@ -825,7 +833,7 @@ function Transactions({ viewScope, setViewScope }) {
                               EditField('קטגוריה', React.createElement('select', { style: editInput, value: editForm.category_id, onChange: e => setEdit('category_id', e.target.value) },
                                 React.createElement('option', { value: '' }, 'ללא קטגוריה'),
                                 db.prepare('SELECT * FROM Categories WHERE is_active=1 ORDER BY parent_id, sort_order').all()
-                                .filter(c => tx.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
+                                .filter(c => editForm.transaction_type === 'Income' ? c.type === 'Income' : c.type === 'Expense')
                                 .map(c => React.createElement('option', { key: c.id, value: c.id },
                                   `${c.parent_id ? '　└ ' : ''}${c.icon || ''} ${c.name}`
                                 ))
@@ -864,6 +872,16 @@ function Transactions({ viewScope, setViewScope }) {
                                 db.prepare("SELECT id, name, type, is_active FROM Recurring_Templates ORDER BY is_active DESC, type, name").all()
                                   .map(r => React.createElement('option', { key: r.id, value: r.id }, `${r.name}${r.type === 'installment' ? ' (תשלומים)' : ''}${!r.is_active ? ' [בארכיון]' : ''}`))
                               )),
+                              EditField('סילוק / תשלום כרטיס אשראי', React.createElement('select', {
+                                style: editInput,
+                                value: editForm.settles_credit_card_id,
+                                onChange: e => setEdit('settles_credit_card_id', e.target.value),
+                              },
+                                React.createElement('option', { value: '' }, '— לא תשלום כרטיס —'),
+                                accounts.filter(a => a.type === 'Credit_Card').map(a =>
+                                  React.createElement('option', { key: a.id, value: String(a.id) }, a.name)
+                                )
+                              )),
                               EditField('יעד חיסכון', React.createElement('select', { style: editInput, value: editForm.savings_goal_id, onChange: e => setEdit('savings_goal_id', e.target.value) },
                                 React.createElement('option', { value: '' }, '— ללא —'),
                                 db.prepare('SELECT id, name FROM Savings_Goals WHERE is_active=1').all()
@@ -876,14 +894,28 @@ function Transactions({ viewScope, setViewScope }) {
                               )),
                             ),
 
+                            editForm.settles_credit_card_id && React.createElement('p', {
+                              style: { fontSize: 11, color: '#7C3AED', marginBottom: 8 }
+                            }, 'בעת שמירה התנועה תסומן כהעברה שאינה תקציבית, כדי למנוע ספירה כפולה של הוצאות הכרטיס.'),
+
                             // checkboxes
                             React.createElement('div', { style: { display: 'flex', gap: 16, marginBottom: 12 } },
                               React.createElement('label', { style: { fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } },
-                                React.createElement('input', { type: 'checkbox', checked: editForm.is_budgetary, onChange: e => setEdit('is_budgetary', e.target.checked) }),
+                                React.createElement('input', {
+                                  type: 'checkbox',
+                                  checked: editForm.settles_credit_card_id ? false : editForm.is_budgetary,
+                                  disabled: !!editForm.settles_credit_card_id,
+                                  onChange: e => setEdit('is_budgetary', e.target.checked)
+                                }),
                                 ' תקציבי'
                               ),
                               React.createElement('label', { style: { fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 } },
-                                React.createElement('input', { type: 'checkbox', checked: editForm.is_maaser_obligated, onChange: e => setEdit('is_maaser_obligated', e.target.checked) }),
+                                React.createElement('input', {
+                                  type: 'checkbox',
+                                  checked: editForm.settles_credit_card_id ? false : editForm.is_maaser_obligated,
+                                  disabled: !!editForm.settles_credit_card_id,
+                                  onChange: e => setEdit('is_maaser_obligated', e.target.checked)
+                                }),
                                 ' חייב במעשר'
                               ),
                             ),
@@ -907,6 +939,11 @@ function Transactions({ viewScope, setViewScope }) {
                               tx.value_date && InfoField('תאריך ערך', tx.value_date),
                               tx.created_at && InfoField('תאריך יצירה', tx.created_at.slice(0, 10)),
                               tx.description && InfoField('הערות', tx.description),
+                              tx.settles_credit_card_id && InfoField(
+                                'תשלום כרטיס אשראי',
+                                db.prepare('SELECT name FROM Accounts WHERE id=?').get(tx.settles_credit_card_id)?.name || '—',
+                                '#7C3AED'
+                              ),
                               tx.tags && InfoField('תגיות', tx.tags),
                               expandedData.loan && InfoField('הלוואה מקושרת', expandedData.loan.name, '#E11D48'),
                               expandedData.recurring && InfoField(
@@ -970,7 +1007,7 @@ function Transactions({ viewScope, setViewScope }) {
           const type = e.target.value
           if (!confirm(`לשנות ${selectedIds.size} תנועות ל${type === 'Income' ? 'הכנסה' : 'הוצאה'}?`)) return
           const stmt = db.prepare('UPDATE Transactions SET transaction_type=? WHERE id=?')
-          selectedIds.forEach(id => stmt.run(type, id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(type, id)))()
           setSelectedIds(new Set())
           loadData()
         }
@@ -992,13 +1029,33 @@ function Transactions({ viewScope, setViewScope }) {
           const catName = categories.find(c => String(c.id) === catId)?.name || ''
           if (!confirm(`לשנות קטגוריה של ${selectedIds.size} תנועות ל"${catName}"?`)) return
           const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
-          selectedIds.forEach(id => stmt.run(catId, id))
-          setSelectedIds(new Set())
+          db.transaction(() => selectedIds.forEach(id => stmt.run(catId, id)))()
+          setBulkCategoryParentId(catId)
           loadData()
         }
       },
         React.createElement('option', { value: '' }, 'שנה קטגוריה...'),
         categories.map(c => React.createElement('option', { key: c.id, value: String(c.id) }, `${c.icon || ''} ${c.name}`))
+      ),
+
+      bulkCategoryParentId && React.createElement('select', {
+        style: { backgroundColor: '#1E293B', color: '#fff', border: '1px solid #334155', borderRadius: 8, padding: '4px 10px', fontSize: 12, cursor: 'pointer' },
+        value: '',
+        onChange: e => {
+          if (!e.target.value) return
+          const subId = e.target.value
+          const subName = db.prepare('SELECT name FROM Categories WHERE id=?').get(subId)?.name || ''
+          if (!confirm(`לשנות תת־קטגוריה של ${selectedIds.size} תנועות ל״${subName}״?`)) return
+          const stmt = db.prepare('UPDATE Transactions SET category_id=? WHERE id=?')
+          db.transaction(() => selectedIds.forEach(id => stmt.run(subId, id)))()
+          setSelectedIds(new Set())
+          setBulkCategoryParentId('')
+          loadData()
+        }
+      },
+        React.createElement('option', { value: '' }, 'שנה תת־קטגוריה...'),
+        db.prepare('SELECT * FROM Categories WHERE parent_id=? AND is_active=1 ORDER BY sort_order').all(Number(bulkCategoryParentId))
+          .map(c => React.createElement('option', { key: c.id, value: String(c.id) }, c.name))
       ),
 
       React.createElement('div', { style: { width: 1, height: 20, backgroundColor: '#334155' } }),
@@ -1009,7 +1066,7 @@ function Transactions({ viewScope, setViewScope }) {
         onClick: () => {
           if (!confirm(`למחוק ${selectedIds.size} תנועות לצמיתות?`)) return
           const stmt = db.prepare('DELETE FROM Transactions WHERE id=?')
-          selectedIds.forEach(id => stmt.run(id))
+          db.transaction(() => selectedIds.forEach(id => stmt.run(id)))()
           setSelectedIds(new Set())
           loadData()
         }
@@ -1020,6 +1077,14 @@ function Transactions({ viewScope, setViewScope }) {
         style: { background: 'none', border: 'none', color: '#94A3B8', fontSize: 18, cursor: 'pointer', lineHeight: 1 },
         onClick: () => setSelectedIds(new Set()),
       }, '✕'),
+    ),
+
+    sortedTransactions.length > displayedTransactions.length && React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, padding: 14 } },
+      React.createElement('span', { style: { fontSize: 12, color: '#64748B' } }, `מוצגות ${displayedTransactions.length} מתוך ${sortedTransactions.length} תנועות`),
+      React.createElement('button', {
+        style: { backgroundColor: '#F1F5F9', border: '1px solid #CBD5E1', borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12 },
+        onClick: () => setVisibleLimit(limit => limit + 200),
+      }, 'הצג עוד 200 תנועות'),
     ),
 
     showModal && React.createElement(AddTransactionModal, {
@@ -1089,25 +1154,17 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
 
   function detectCategory(businessEntity) {
     if (!businessEntity || businessEntity.length < 2) return
-    const stopWords = ['בעמ', 'בע"מ', 'חברה', 'עוסק', 'מורשה', 'בע', 'של', 'את', 'על', 'עם', 'ltd', 'inc']
-    const getWords = str => str.toLowerCase()
-      .replace(/[^א-תa-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2 && !stopWords.includes(w))
-      .map(w => w.startsWith('ה') && w.length > 3 ? w.slice(1) : w)
-
-    const name = businessEntity.toLowerCase().trim()
-    const rules = db.prepare(`
+    const rules = filterEligibleRules(db.prepare(`
       SELECT * FROM Automation_Rules
       WHERE match_type NOT IN ('setting','mapping') AND category_id IS NOT NULL
-    `).all()
+    `).all(), {
+      accountId: form.account_id,
+      amount: form.amount === '' ? null : Number(form.amount),
+      date: form.transaction_date || null,
+    })
+    const best = findBestMerchantRule(businessEntity, rules)
+    if (!best) return
 
-    if (rules.length === 0) return
-
-   // התאמה מדויקת
-  const exactMatches = rules.filter(r => r.original_string.toLowerCase() === name)
-  if (exactMatches.length > 0) {
-    const best = exactMatches.sort((a, b) => b.use_count - a.use_count)[0]
     const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(best.category_id)
     if (cat?.parent_id) {
       set('category_id', cat.parent_id.toString())
@@ -1117,45 +1174,6 @@ function AddTransactionModal({ categories, accounts, onClose, onSave, selectedMo
       setSubCategoryId('')
     }
     setAutoDetected(true)
-    return
-  }
-
-    // התאמה חלקית
-    const currentWords = getWords(name)
-    if (currentWords.length === 0) return
-
-    let scores = {}
-    let ruleMap = {}
-    for (const rule of rules) {
-      const ruleWords = getWords(rule.original_string)
-      const matches = currentWords.filter(cw =>
-        ruleWords.some(rw =>
-          rw.includes(cw) || cw.includes(rw) ||
-          (cw.length >= 4 && rw.length >= 4 && (rw.startsWith(cw.slice(0, 4)) || cw.startsWith(rw.slice(0, 4))))
-        )
-      )
-      if (matches.length > 0) {
-        const key = rule.category_id
-        scores[key] = (scores[key] || 0) + matches.length * (rule.use_count || 1)
-        if (!ruleMap[key] || matches.length * (rule.use_count || 1) > (ruleMap[key]._score || 0)) {
-          ruleMap[key] = { ...rule, _score: matches.length * (rule.use_count || 1) }
-        }
-      }
-    }
-
-    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1])
-    if (sorted.length > 0) {
-      const catId = parseInt(sorted[0][0])
-      const cat = db.prepare('SELECT * FROM Categories WHERE id=?').get(catId)
-      if (cat?.parent_id) {
-        set('category_id', cat.parent_id.toString())
-        setSubCategoryId(cat.id.toString())
-      } else {
-        set('category_id', catId.toString())
-        setSubCategoryId('')
-      }
-      setAutoDetected(true)
-    }
   }
 
   function handleSave(addAnother = false) {

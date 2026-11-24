@@ -5,9 +5,9 @@ const fs = require('fs')
 const { autoUpdater } = require('electron-updater')
 const { initCrashLogger } = require('../crashLogger')
 const Database = require('better-sqlite3')
-initCrashLogger(path.join(os.homedir(), 'AppData', 'Roaming', 'proton'))
 
-const DB_PATH = path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
+const DB_PATH = process.env.PROTON_DB_PATH || path.join(os.homedir(), 'AppData', 'Roaming', 'proton')
+initCrashLogger(DB_PATH)
 process.env.PROTON_DB_PATH = DB_PATH
 
 let mainWindow
@@ -87,26 +87,40 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, '../public/index.html'))
 
-  // בדוק עדכונים כל שעה, לא באופן מיידי
-  autoUpdater.checkForUpdatesAndNotify()
-  setInterval(() => {
-    autoUpdater.checkForUpdates()
-  }, 60 * 60 * 1000) // כל שעה
+  // עדכונים: מורידים ברקע, אך ההתקנה מתבצעת רק לאחר אישור המשתמש.
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.allowPrerelease = true
 
   autoUpdater.on('update-available', () => {
     updateAvailable = true
-    mainWindow.webContents.send('update-available')
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-available')
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.info('Pruton is up to date.')
   })
 
   autoUpdater.on('update-downloaded', () => {
     updateDownloaded = true
-    mainWindow.webContents.send('update-downloaded')
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-downloaded')
   })
 
   autoUpdater.on('error', (error) => {
-    console.error('עדכון שגיאה:', error)
-    mainWindow.webContents.send('update-error', error.message)
+    const rawMessage = error?.message || String(error)
+    const message = /No published versions on GitHub/i.test(rawMessage)
+      ? 'לא נמצאה גרסה שפורסמה ב-GitHub Releases. העדכון האוטומטי יפעל לאחר פרסום גרסה רשמית.'
+      : rawMessage
+    console.error('עדכון שגיאה:', rawMessage)
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-error', message)
   })
+
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates().catch(error => console.error('בדיקת עדכונים נכשלה:', error))
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(error => console.error('בדיקת עדכונים נכשלה:', error))
+    }, 60 * 60 * 1000)
+  }
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show()
@@ -132,6 +146,44 @@ ipcMain.on('restart-app', () => {
     autoUpdater.quitAndInstall()
   } else {
     app.quit()
+  }
+})
+
+
+// ──── ייצוא דוח אבחון לשיתוף ────
+ipcMain.handle('save-diagnostic-report', async (event, report) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: `Pruton-diagnostic-${new Date().toISOString().replace(/[:.]/g, '-')}.json`,
+      filters: [{ name: 'דוח אבחון (JSON)', extensions: ['json'] }]
+    })
+    if (canceled || !filePath) return { success: false, cancelled: true }
+
+    const crashLogPath = path.join(os.homedir(), 'AppData', 'Roaming', 'proton', 'crash.log')
+    let crashLog = null
+    try {
+      if (fs.existsSync(crashLogPath)) {
+        const raw = fs.readFileSync(crashLogPath, 'utf8')
+        crashLog = raw.slice(-100000)
+      }
+    } catch {}
+
+    const completeReport = {
+      ...report,
+      system: {
+        appVersion: app.getVersion(),
+        electronVersion: process.versions.electron,
+        nodeVersion: process.version,
+        platform: process.platform,
+        architecture: process.arch,
+        crashLog,
+      },
+      exportedAt: new Date().toISOString(),
+    }
+    fs.writeFileSync(filePath, JSON.stringify(completeReport, null, 2), 'utf8')
+    return { success: true, path: filePath }
+  } catch (error) {
+    return { success: false, error: error.message }
   }
 })
 
@@ -174,22 +226,27 @@ ipcMain.handle('import-db', async (event, destPath) => {
 // ──── מחיקת בטוחה של נתונים + סגירה (ללא הסרה אוטומטית) ────
 ipcMain.handle('safe-delete-db', async (event, dbPath) => {
   try {
-    // בדוק אם הקובץ קיים
-    if (!fs.existsSync(dbPath)) {
-      return { success: false, error: 'קובץ נתונים לא נמצא' }
+    // הגנה: הפעולה מיועדת רק למסד הנתונים של פרוטון.
+    if (path.basename(dbPath) !== 'proton.db' || path.basename(path.dirname(dbPath)) !== 'proton') {
+      return { success: false, error: 'נתיב מסד הנתונים אינו הנתיב המוכר של פרוטון' }
+    }
+    const dbDir = path.dirname(dbPath)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+      return { success: true, backupPath: null, message: 'נוצרה תיקיית נתונים חדשה' }
     }
 
-    // מחק את הקובץ הראשי וגם את WAL/SHM הנלווים
-    fs.rmSync(dbPath, { force: true })
-    fs.rmSync(dbPath + '-wal', { force: true })
-    fs.rmSync(dbPath + '-shm', { force: true })
-
-    // וודא שנמחק
-    if (fs.existsSync(dbPath)) {
-      return { success: false, error: 'לא הצלחנו למחוק את קובץ הנתונים' }
+    // לא מוחקים: מעבירים את כל התיקייה (DB, WAL, SHM וקובצי עזר) לגיבוי מתוארך.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    let backupDir = path.join(path.dirname(dbDir), 'proton_backup_' + stamp)
+    let suffix = 1
+    while (fs.existsSync(backupDir)) {
+      backupDir = path.join(path.dirname(dbDir), 'proton_backup_' + stamp + '_' + suffix++)
     }
+    fs.renameSync(dbDir, backupDir)
+    fs.mkdirSync(dbDir, { recursive: true })
 
-    return { success: true, message: 'הנתונים נמחקו בהצלחה' }
+    return { success: true, backupPath: backupDir, message: 'הנתונים הישנים נשמרו בגיבוי ונוצרה תיקייה נקייה' }
   } catch (e) {
     return { success: false, error: e.message }
   }

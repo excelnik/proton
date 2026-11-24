@@ -1,6 +1,8 @@
 const React = require('react')
 const { useState, useEffect, useMemo } = React
 const db = require('../db/index.js')
+const { detectRecurringPatterns } = require('../lib/recurringDetection.js')
+const { normalizeMerchantName } = require('../lib/transactionRules.js')
 const { addMonthsClamped } = require('../lib/dateUtils.js')
 
 function Recurring() {
@@ -15,6 +17,8 @@ function Recurring() {
   const [deleteTemplate, setDeleteTemplate] = useState(null)
   const [deleteMode, setDeleteMode] = useState('keep')
   const [linkTemplate, setLinkTemplate] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  const [scanning, setScanning] = useState(false)
 
   useEffect(() => {
     const handler = e => {
@@ -73,29 +77,87 @@ function Recurring() {
 
   useEffect(() => { loadTemplates() }, [])
 
+  function scanRecurringPatterns() {
+    setScanning(true)
+    try {
+      const rows = db.prepare(`
+        SELECT id, transaction_date, amount, transaction_type, business_entity,
+               account_id, category_id, recurring_id
+        FROM Transactions
+        WHERE transaction_type='Expense'
+          AND recurring_id IS NULL
+          AND transaction_date >= date('now','-15 months')
+          AND TRIM(COALESCE(business_entity,'')) <> ''
+        ORDER BY transaction_date
+      `).all()
+      const activeKeys = new Set(templates.filter(t => t.type === 'recurring' && t.is_active)
+         .map(t => `${t.account_id ?? 'none'}|${normalizeMerchantName(t.name)}`))
+      const found = detectRecurringPatterns(rows).filter(item =>
+        !activeKeys.has(`${item.account_id ?? 'none'}|${normalizeMerchantName(item.name)}`)
+      )
+      setSuggestions(found)
+      if (!found.length) alert('לא נמצאו דפוסים חודשיים שעומדים בתנאי הזיהוי (לפחות 5 חודשים).')
+    } catch (error) {
+      alert('שגיאה בסריקת התנועות: ' + error.message)
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  function acceptRecurringSuggestion(suggestion) {
+    const amountLabel = '₪' + suggestion.amount.toLocaleString('he-IL')
+    if (!confirm(`ליצור הוראת קבע עבור "${suggestion.name}" לפי ${suggestion.count} תנועות קודמות?\nסכום חודשי ממוצע: ${amountLabel}${suggestion.is_estimated ? ' (משתנה)' : ''}.\nהתנועות הקיימות יקושרו להוראה, ותחזיות עתידיות ייווצרו לפי בחירתך בהמשך.`)) return
+    const create = db.transaction(() => {
+      const result = db.prepare(`
+        INSERT INTO Recurring_Templates
+          (name, type, amount, frequency, charge_day, first_charge_date,
+           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated,
+           minimum_commitment, generate_forecast, notes, is_active, installments_paid)
+        VALUES (?, 'recurring', ?, 'monthly', ?, ?, ?, ?, ?, 1, 0, 1, 1, ?, 1, 0)
+      `).run(
+        suggestion.name, suggestion.amount, suggestion.charge_day, suggestion.first_charge_date,
+        suggestion.account_id || null, suggestion.category_id || null, suggestion.is_estimated ? 1 : 0,
+        `נוצרה מהצעת זיהוי אוטומטי על בסיס ${suggestion.count} תנועות. טווח סכומים: ${suggestion.amount_min}–${suggestion.amount_max} ₪.`
+      )
+      const link = db.prepare('UPDATE Transactions SET recurring_id=? WHERE id=? AND recurring_id IS NULL')
+      suggestion.transaction_ids.forEach(id => link.run(result.lastInsertRowid, id))
+    })
+    create()
+    setSuggestions(prev => prev.filter(item => item.key !== suggestion.key))
+    loadTemplates()
+  }
+
+
+
   const recurring = templates.filter(t => t.type === 'recurring')
   const installments = templates.filter(t => t.type === 'installment')
 
   const summary = useMemo(() => {
     if (tab === 'recurring') {
       const monthly = recurring.reduce((s, t) => {
+        if (t.minimum_commitment === 0 || t.frequency === 'one_off') return s;
         if (t.frequency === 'monthly') return s + t.amount
+        if (t.frequency === 'bimonthly') return s + t.amount / 2
         if (t.frequency === 'quarterly') return s + t.amount / 3
         if (t.frequency === 'annual') return s + t.amount / 12
+        if (t.frequency === 'seasonal') {
+          const months = String(t.season_months || '').split(',').map(v => Number(v.trim())).filter(m => Number.isInteger(m) && m >= 1 && m <= 12)
+          return s + t.amount * new Set(months).size / 12
+        }
         return s
       }, 0)
       const annual = monthly * 12
       return {
-        s1: { label: 'סך התחייבויות חודשיות', value: '₪' + Math.round(monthly).toLocaleString('he-IL'), color: '#E11D48' },
+        s1: { label: 'הוצאות מינימום חודשיות', value: '₪' + Math.round(monthly).toLocaleString('he-IL'), color: '#E11D48' },
         s2: { label: 'עלות שנתית', value: '₪' + Math.round(annual).toLocaleString('he-IL'), color: '#F59E0B' },
         s3: { label: 'הוראות קבע פעילות', value: recurring.length.toString(), color: '#2563EB' },
       }
     } else {
       const totalDebt = installments.reduce((s, t) => s + t.amount * (t.num_installments - (t.installments_paid || 0)), 0)
-      const monthlyDrop = installments.reduce((s, t) => s + t.amount, 0)
+      const monthlyDrop = installments.reduce((s, t) => t.minimum_commitment === 0 ? s : s + t.amount, 0)
       return {
         s1: { label: 'יתרת חוב כוללת', value: '₪' + Math.round(totalDebt).toLocaleString('he-IL'), color: '#E11D48' },
-        s2: { label: 'עלות חודשית', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
+        s2: { label: 'הוצאות מינימום חודשיות', value: '₪' + Math.round(monthlyDrop).toLocaleString('he-IL'), color: '#F59E0B' },
         s3: { label: 'עסקאות פעילות', value: installments.length.toString(), color: '#2563EB' },
       }
     }
@@ -131,6 +193,26 @@ function Recurring() {
           onClick: () => { setModalType('installment'); setEditTemplate(null); setShowModal(true) },
         }, '+ עסקת תשלומים'),
       ),
+    ),
+
+    tab === 'recurring' && React.createElement('div', { style: { backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 14, marginBottom: 14 } },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } },
+        React.createElement('div', null,
+          React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#0F172A' } }, 'זיהוי הוראות קבע מתוך תנועות קיימות'),
+          React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, 'המערכת מחפשת לפחות 5 חיובים בחודשים שונים, באותו עסק ובחשבון אחד. יצירה וקישור יתבצעו רק לאחר אישורך.'),
+        ),
+        React.createElement('button', { style: styles.btnSecondary, disabled: scanning, onClick: scanRecurringPatterns }, scanning ? 'סורק...' : 'סרוק תנועות'),
+      ),
+      suggestions.length > 0 && React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 } },
+        suggestions.map(item => React.createElement('div', { key: item.key, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: 10, border: '1px solid #E2E8F0', borderRadius: 8, backgroundColor: '#fff' } },
+          React.createElement('div', { style: { minWidth: 0 } },
+            React.createElement('p', { style: { fontSize: 13, fontWeight: '600', color: '#0F172A' } }, item.name),
+            React.createElement('p', { style: { fontSize: 11, color: '#64748B' } }, `${item.count} חיובים · ${item.first_charge_date} עד ${item.last_charge_date} · ${item.is_estimated ? 'סכום משתנה, ממוצע' : 'סכום קבוע'}`),
+            React.createElement('p', { style: { fontSize: 12, color: '#2563EB' } }, `ממוצע ${fmt(item.amount)} · טווח ${fmt(item.amount_min)}–${fmt(item.amount_max)}`),
+          ),
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => acceptRecurringSuggestion(item) }, 'אשר וצור הו״ק'),
+        ))
+      )
     ),
 
     // כרטיסי סיכום
@@ -286,7 +368,7 @@ function Recurring() {
 
 function RecurringCard({ template: t, fmt, onEdit, onArchive, onDelete, onLink }) {
   const [showTxs, setShowTxs] = useState(false)
-  const freqLabel = { monthly: 'חודשי', quarterly: 'רבעוני', annual: 'שנתי' }[t.frequency] || 'חודשי'
+  const freqLabel = { monthly: 'חודשי', bimonthly: 'אחת לחודשיים', quarterly: 'רבעוני', annual: 'שנתי', seasonal: 'עונתי', one_off: 'חד-פעמי' }[t.frequency] || 'חודשי'
 
   const linkedTxs = showTxs ? db.prepare(`
     SELECT * FROM Transactions WHERE recurring_id=? ORDER BY transaction_date DESC LIMIT 12
@@ -568,6 +650,7 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     name: editTemplate?.name ?? '',
     amount: editTemplate?.amount?.toString() ?? '',
     frequency: editTemplate?.frequency ?? 'monthly',
+    season_months: editTemplate?.season_months ?? '3,6,9,12',
     charge_day: editTemplate?.charge_day?.toString() ?? '1',
     first_charge_date: editTemplate?.first_charge_date ?? new Date().toISOString().slice(0, 10),
     account_id: editTemplate?.account_id?.toString() ?? accounts[0]?.id?.toString() ?? '',
@@ -575,6 +658,8 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     is_estimated: editTemplate?.is_estimated ?? 0,
     is_budgetary: editTemplate?.is_budgetary ?? 1,
     is_maaser_obligated: editTemplate?.is_maaser_obligated ?? 1,
+    minimum_commitment: editTemplate?.minimum_commitment ?? 1,
+    generate_forecast: editTemplate?.generate_forecast ?? 1,
     num_installments: editTemplate?.num_installments?.toString() ?? '',
     total_amount: editTemplate?.total_amount?.toString() ?? '',
     notes: editTemplate?.notes ?? '',
@@ -596,6 +681,12 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       setError('נא למלא סכום כולל ומספר תשלומים'); return
     }
     if (type === 'recurring' && !form.amount) { setError('נא למלא סכום'); return }
+    if (type === 'recurring' && form.frequency === 'seasonal') {
+      const months = form.season_months.split(',').map(v => Number(v.trim()))
+      if (!months.length || months.some(m => !Number.isInteger(m) || m < 1 || m > 12)) {
+        setError('יש להזין חודשי עונה בין 1 ל-12, מופרדים בפסיקים'); return
+      }
+    }
 
     const amount = type === 'installment'
       ? (installmentAmount || parseFloat(form.amount))
@@ -610,14 +701,14 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     if (editTemplate) {
       db.prepare(`
         UPDATE Recurring_Templates SET
-          name=?, type=?, amount=?, frequency=?, charge_day=?, first_charge_date=?,
-          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?,
+          name=?, type=?, amount=?, frequency=?, season_months=?, charge_day=?, first_charge_date=?,
+          account_id=?, category_id=?, is_estimated=?, is_budgetary=?, is_maaser_obligated=?, minimum_commitment=?, generate_forecast=?,
           num_installments=?, total_amount=?, template_payload=?, notes=?
         WHERE id=?
       `).run(
-        form.name, type, amount, form.frequency, parseInt(form.charge_day) || 1, form.first_charge_date,
+        form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0, withVirtual ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null, editTemplate.id
@@ -625,14 +716,14 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
     } else {
       db.prepare(`
         INSERT INTO Recurring_Templates
-          (name, type, amount, frequency, charge_day, first_charge_date,
-           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated,
+          (name, type, amount, frequency, season_months, charge_day, first_charge_date,
+           account_id, category_id, is_estimated, is_budgetary, is_maaser_obligated, minimum_commitment, generate_forecast,
            num_installments, total_amount, template_payload, notes, is_active, installments_paid)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)
       `).run(
-        form.name, type, amount, form.frequency, parseInt(form.charge_day) || 1, form.first_charge_date,
+        form.name, type, amount, form.frequency, type === 'recurring' && form.frequency === 'seasonal' ? form.season_months : null, parseInt(form.charge_day) || 1, form.first_charge_date,
         form.account_id || null, form.category_id || null,
-        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0,
+        form.is_estimated ? 1 : 0, form.is_budgetary ? 1 : 0, form.is_maaser_obligated ? 1 : 0, form.minimum_commitment ? 1 : 0, withVirtual ? 1 : 0,
         type === 'installment' ? parseInt(form.num_installments) : null,
         type === 'installment' ? parseFloat(form.total_amount) : null,
         payload, form.notes || null
@@ -678,11 +769,18 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
             Field('סכום (₪)', React.createElement('input', { style: styles.input, type: 'number', value: form.amount, onChange: e => set('amount', e.target.value) })),
             Field('תדירות', React.createElement('select', { style: styles.input, value: form.frequency, onChange: e => set('frequency', e.target.value) },
               React.createElement('option', { value: 'monthly' }, 'חודשי'),
+              React.createElement('option', { value: 'bimonthly' }, 'אחת לחודשיים'),
               React.createElement('option', { value: 'quarterly' }, 'רבעוני'),
               React.createElement('option', { value: 'annual' }, 'שנתי'),
+              React.createElement('option', { value: 'seasonal' }, 'עונתי'),
+              React.createElement('option', { value: 'one_off' }, 'חד-פעמי'),
             )),
             Field('יום בחודש', React.createElement('input', { style: styles.input, type: 'number', min: 1, max: 28, value: form.charge_day, onChange: e => set('charge_day', e.target.value) })),
           ),
+          form.frequency === 'seasonal' && Field('חודשי עונה (1–12, מופרדים בפסיקים)', React.createElement('input', {
+            style: styles.input, value: form.season_months, onChange: e => set('season_months', e.target.value),
+            placeholder: 'למשל: 3,6,9,12'
+          })),
           React.createElement('label', { style: styles.checkLabel },
             React.createElement('input', { type: 'checkbox', checked: !!form.is_estimated, onChange: e => set('is_estimated', e.target.checked) }),
             ' סכום משתנה / משוער (~)'
@@ -713,6 +811,10 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
               React.createElement('input', { type: 'checkbox', checked: !!form.is_maaser_obligated, onChange: e => set('is_maaser_obligated', e.target.checked) }),
               ' חייב במעשר'
             ),
+            React.createElement('label', { style: styles.checkLabel },
+              React.createElement('input', { type: 'checkbox', checked: !!form.minimum_commitment, onChange: e => set('minimum_commitment', e.target.checked) }),
+              ' נכלל בהוצאות מינימום חודשיות'
+            ),
           ),
           Field('הערות', React.createElement('input', { style: styles.input, value: form.notes, onChange: e => set('notes', e.target.value), placeholder: 'הערות נוספות...' })),
         ),
@@ -724,8 +826,8 @@ function TemplateModal({ type, editTemplate, onClose, onSave }) {
       React.createElement('div', { style: { ...styles.modalFooter, justifyContent: 'space-between' } },
         React.createElement('button', { style: styles.btnSecondary, onClick: onClose }, 'ביטול'),
         React.createElement('div', { style: { display: 'flex', gap: 8 } },
-          React.createElement('button', { style: styles.btnSecondary, onClick: () => saveTemplate(false) }, 'שמור ללא תבנית'),
-          React.createElement('button', { style: styles.btnPrimary, onClick: () => saveTemplate(true) }, 'שמור עם תנועות וירטואליות'),
+          React.createElement('button', { style: styles.btnSecondary, onClick: () => saveTemplate(false) }, 'שמור ללא תחזית'),
+          React.createElement('button', { style: styles.btnPrimary, onClick: () => saveTemplate(true) }, 'שמור עם תחזית'),
         ),
       ),
     )

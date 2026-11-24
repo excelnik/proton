@@ -1,4 +1,6 @@
 const React = require('react')
+const APP_VERSION = require('../../package.json').version
+const DISPLAY_VERSION = `v${APP_VERSION.replace('-beta.', ' בטא ')}`
 
 const NAV_ITEMS = [
   { id: 'dashboard',    icon: '🏠', label: 'דשבורד',        group: 'כללי' },
@@ -17,7 +19,7 @@ const NAV_ITEMS = [
   { id: 'settings',     icon: '⚙️', label: 'הגדרות',         group: 'מערכת' },
 ]
 
-function Sidebar({ currentPage, onNavigate }) {
+function Sidebar({ currentPage, onNavigate, onReport }) {
   const groups = {}
   NAV_ITEMS.forEach(item => {
     if (!groups[item.group]) groups[item.group] = []
@@ -29,7 +31,7 @@ function Sidebar({ currentPage, onNavigate }) {
       React.createElement('div', { style: styles.logoIcon }, 'P'),
       React.createElement('div', null,
         React.createElement('p', { style: styles.logoTitle }, 'פרוטון'),
-        React.createElement('p', { style: styles.logoSub }, 'v0.3.1 בטא'),
+        React.createElement('p', { style: styles.logoSub }, DISPLAY_VERSION),
       )
     ),
     React.createElement('nav', { style: styles.nav },
@@ -51,6 +53,13 @@ function Sidebar({ currentPage, onNavigate }) {
           )
         )
       )
+    ),
+    React.createElement('div', { style: { padding: 10, borderTop: '1px solid #E2E8F0' } },
+      React.createElement('button', {
+        type: 'button',
+        onClick: onReport,
+        style: { width: '100%', padding: '10px 12px', borderRadius: 9, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#1D4ED8', cursor: 'pointer', fontSize: 13, fontWeight: 600, textAlign: 'right' },
+      }, '📝 דיווח ותיעוד')
     )
   )
 }

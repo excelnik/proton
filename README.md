@@ -1,6 +1,6 @@
 # פרוטון — מערכת ניהול פיננסי אישי 💰
 
-> גרסת בטא פעילה | הפרויקט בפיתוח פתוח
+> גרסה 0.3.2 | פרויקט אישי בפיתוח
 
 אפליקציית דסקטופ לניהול פיננסי אישי, בנויה עם Electron + React + SQLite. כל הנתונים נשמרים מקומית על המחשב — ללא ענן, ללא שרתים חיצוניים, ללא מנוי.
 
@@ -16,14 +16,19 @@
 
 ```bash
 # שכפל את הפרויקט
-git clone https://github.com/excelnik/proton.git
+git clone https://github.com/dovid-mendelowitz/proton.git
 cd proton
 
-# התקן תלויות
-npm install
+# התקן תלויות בלי להפעיל את node-gyp 10.1 המצורף ל-npm
+npm ci --ignore-scripts
 
-# קמפל את better-sqlite3
-npx electron-rebuild -f -w better-sqlite3
+# הורד את בינארי Electron
+npm rebuild electron
+
+# פתח Developer Command Prompt for VS 2026 x64, ואז:
+cd node_modules\better-sqlite3
+npm exec --yes --package=node@22.22.2 --package=node-gyp@13.1.0 -- node-gyp rebuild --release --target=30.5.1 --runtime=electron --dist-url=https://electronjs.org/headers --arch=x64
+cd ..\..
 
 # הרץ במצב פיתוח
 npm run dev
@@ -32,18 +37,38 @@ npm run dev
 ### אריזה לקובץ התקנה
 
 ```bash
-npm run dist
+npm run dist -- --publish never --config.win.signAndEditExecutable=false
 ```
 
-הקובץ יימצא בתיקיית `dist-app/`.
+הפקודה יוצרת מתקין בדיקה unsigned בתיקיית `dist-app/` ולא מפרסמת אותו. הפצת גרסה חתומה דורשת הגדרת חתימת Windows והרשאות מתאימות.
 
 ---
+
+## בדיקות למפתחים
+
+לאחר התקנת התלויות:
+
+```bash
+npm test
+npm run webpack:build
+```
+
+להרצת סביבת פיתוח עם מסד נתונים מבודד ב-Windows PowerShell:
+
+```powershell
+$env:PROTON_DB_PATH = Join-Path $env:TEMP 'proton-dev-test-data'
+npm run dev
+```
+
+האפליקציה תיצור בתיקייה זו את `proton.db` ואת `crash.log`, בלי להשתמש בתיקיית הנתונים האישית. סגירת חלון PowerShell מסירה את משתנה הסביבה מהסביבה הנוכחית.
+
+הבדיקות מכסות פירוש תאריכים, תיקון סכמת SQLite, תנאי חוקי זיהוי ולוחות זמנים של הוראות קבע. GitHub Actions מריץ את הבדיקות ואת בניית הייצור בכל שינוי בענף העבודה ובבקשת מיזוג ל-`main`.
 
 ## פיצ'רים
 
 ### ניהול שוטף
 - **דשבורד** — KPI חודשי, בקרת תקציב, שווי נקי, גרפים, מעשרות ומוטו יעב"ץ
-- **תנועות** — טבלה עם עריכה inline מהירה ומלאה, אקורדיון שדות מקושרים, פיצול, קיזוז ושכפול
+- **תנועות** — טבלה עם עריכה inline מהירה ומלאה, הערות גלויות, קישורי סילוק כרטיס אשראי, פיצול, קיזוז ושכפול
 - **ייבוא מהבנק** — Excel/CSV עם מיפוי עמודות, זיהוי כפילויות וסיווג אוטומטי חכם
 - **סיווג תנועות** — סיווג ידני עם למידה אוטומטית, זרימת עבודה מקלדת מלאה
 - **תכנון תקציב** — Zero-based budgeting עם auto-save
@@ -61,7 +86,7 @@ npm run dist
 ### ניהול מערכת
 - **קטגוריות** — ניהול היררכי עם תת-קטגוריות, אייקונים וצבעים
 - **חשבונות** — בנק, אשראי ומזומן עם יתרות מחושבות
-- **הגדרות** — חוקי זיהוי אוטומטי, גיבוי/שחזור DB, איפוס מערכת
+- **הגדרות** — חוקי זיהוי עם תנאי חשבון/סכום/תאריך, גיבוי/שחזור DB, איפוס מערכת
 
 ---
 

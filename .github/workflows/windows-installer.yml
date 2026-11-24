@@ -1,0 +1,37 @@
+name: Windows installer
+# Builds a Windows NSIS installer and publishes it as a workflow artifact for testing.
+
+on:
+  push:
+    branches:
+      - main
+      - "improvements/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run unit tests
+        run: npm test
+      - name: Build Windows installer
+        run: npm run webpack:build && npx electron-builder --publish never
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pruton-Windows-Installer
+          path: dist-app/Pruton.Setup.exe
+          if-no-files-found: error
+          retention-days: 14
